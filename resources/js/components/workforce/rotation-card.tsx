@@ -82,24 +82,28 @@ export function RotationCard({
                         <Badge variant="outline">{getPatternDisplay()}</Badge>
                     </div>
                     <div className="text-xs text-gray-600">
-                        <p>{rotation.pattern_json.work_days} work / {rotation.pattern_json.rest_days} rest days</p>
-                        <p>Cycle: {rotation.pattern_json.cycle_length || rotation.pattern_json.pattern.length} days</p>
+                        <p>{rotation.pattern_json?.work_days || 0} work / {rotation.pattern_json?.rest_days || 0} rest days</p>
+                        <p>Cycle: {rotation.pattern_json?.cycle_length || rotation.pattern_json?.pattern?.length || 0} days</p>
                     </div>
                 </div>
 
                 {/* Pattern Visualization */}
                 <div className="flex gap-1">
-                    {rotation.pattern_json.pattern.slice(0, 7).map((day, index) => (
-                        <div
-                            key={index}
-                            className={`h-6 w-3 rounded text-xs font-bold flex items-center justify-center text-white ${
-                                day === 1 ? 'bg-blue-500' : 'bg-gray-300'
-                            }`}
-                            title={day === 1 ? 'Work' : 'Rest'}
-                        >
-                            {day === 1 ? 'W' : 'R'}
-                        </div>
-                    ))}
+                    {rotation.pattern_json?.pattern && Array.isArray(rotation.pattern_json.pattern) ? (
+                        rotation.pattern_json.pattern.slice(0, 7).map((day, index) => (
+                            <div
+                                key={index}
+                                className={`h-6 w-3 rounded text-xs font-bold flex items-center justify-center text-white ${
+                                    day === 1 ? 'bg-blue-500' : 'bg-gray-300'
+                                }`}
+                                title={day === 1 ? 'Work' : 'Rest'}
+                            >
+                                {day === 1 ? 'W' : 'R'}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-xs text-gray-500">No pattern data</div>
+                    )}
                 </div>
 
                 {/* Status and Employees */}
