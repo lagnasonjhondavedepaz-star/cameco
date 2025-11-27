@@ -27,11 +27,27 @@ class RotationController extends Controller
     public function index(Request $request): Response
     {
         $rotations = $this->employeeRotationService->getRotations();
+        
+        // Calculate summary statistics
+        $totalRotations = $rotations->count();
+        $activeRotations = $rotations->where('is_active', true)->count();
+        
+        // Count total employees assigned across all rotations
+        $employeesInRotation = \App\Models\RotationAssignment::distinct('employee_id')
+            ->where('is_active', true)
+            ->count();
+        
+        // Calculate coverage percentage
+        $totalEmployees = \App\Models\Employee::count();
+        $coveragePercentage = $totalEmployees > 0 
+            ? round(($employeesInRotation / $totalEmployees) * 100, 2)
+            : 0;
+        
         $summary = [
-            'total_rotations' => $rotations->count(),
-            'active_rotations' => $rotations->where('is_active', true)->count(),
-            'inactive_rotations' => $rotations->where('is_active', false)->count(),
-            'employees_on_rotation' => 0,
+            'total_rotations' => $totalRotations,
+            'active_patterns' => $activeRotations,
+            'employees_in_rotation' => $employeesInRotation,
+            'coverage_percentage' => $coveragePercentage,
         ];
 
         $departments = \App\Models\Department::all(['id', 'name', 'code'])->toArray();
