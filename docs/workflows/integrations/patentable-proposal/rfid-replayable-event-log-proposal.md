@@ -147,6 +147,6 @@ sequenceDiagram
 ---
 
 **Related Documentation**
-- [RFID Timekeeping Integration](./rfid-integration.md)
+- [RFID Timekeeping Integration](./../rfid-integration.md)
 - [Timekeeping Module Architecture](../../TIMEKEEPING_MODULE_ARCHITECTURE.md)
 - [Payroll Module Architecture](../../PAYROLL_MODULE_ARCHITECTURE.md)
