@@ -13,44 +13,45 @@ Future-ready workflow for non-cash salary disbursement once Office Admin enables
 
 ```mermaid
 graph TD
-    Start([Payroll Approved]) --> CheckConfig{Bank/E-wallet Enabled?}
+    Start([Payroll Approved]) --> CheckConfig{Bank or Ewallet Enabled?}
     CheckConfig -->|No| FallbackCash[Use Cash Salary Distribution]
     FallbackCash --> End
     CheckConfig -->|Yes| SelectMethod{Payment Method}
     SelectMethod --> Bank[Bank Transfer]
-    SelectMethod --> Ewallet[E-wallet]
+    SelectMethod --> Ewallet[Ewallet]
 
     Bank --> ValidateAccounts[Validate Employee Bank Details]
-    ValidateAccounts --> GenerateBankFile[Generate Bank File (ACH/CSV)]
-    GenerateBankFile --> QAReview[QA Review + Digital Signature]
+    ValidateAccounts --> GenerateBankFile[Generate Bank File ACH or CSV]
+    GenerateBankFile --> QAReview[QA Review and Digital Signature]
     QAReview --> OAApproval[Office Admin Approval]
     OAApproval --> UploadPortal[Upload to Bank Portal]
-    UploadPortal --> BankAuth[Dual Authorization (Bank)]
+    UploadPortal --> BankAuth[Dual Authorization Bank]
     BankAuth --> AwaitStatus[Await Bank Confirmation]
     AwaitStatus --> HandleFailures{Failures?}
-    HandleFailures -->|Yes| ResolveBankIssues[Resolve (account closed, invalid)]
-    ResolveBankIssues --> RequeuePayment[Requeue or fallback cash]
-    HandleFailures -->|No| PostBankPayments[Mark as Paid + Archive]
+    HandleFailures -->|Yes| ResolveBankIssues[Resolve Issues\nAccount Closed or Invalid]
+    ResolveBankIssues --> RequeuePayment[Requeue or Fallback Cash]
+    HandleFailures -->|No| PostBankPayments[Mark as Paid and Archive]
 
-    Ewallet --> ValidateWallets[Validate E-wallet IDs]
-    ValidateWallets --> GenerateBatch[Generate E-wallet Batch File/API Payload]
-    GenerateBatch --> FundWalletPool[Fund Corporate Wallet or Settle]
+    Ewallet --> ValidateWallets[Validate Ewallet IDs]
+    ValidateWallets --> GenerateBatch[Generate Ewallet Batch File or API Payload]
+    GenerateBatch --> FundWalletPool[Fund Corporate Wallet or Settlement]
     FundWalletPool --> OAApproval2[Office Admin Approval]
-    OAApproval2 --> SubmitEwallet[Submit via API/Portal]
+    OAApproval2 --> SubmitEwallet[Submit via API or Portal]
     SubmitEwallet --> ProviderAck[Provider Acknowledgment]
     ProviderAck --> ReconStatus{All Paid?}
     ReconStatus -->|No| InvestigateWallet[Investigate Failed Wallets]
-    InvestigateWallet --> ReprocessOrCash[Reprocess or fallback cash]
-    ReconStatus -->|Yes| PostWalletPayments[Mark as Paid + Archive]
+    InvestigateWallet --> ReprocessOrCash[Reprocess or Fallback Cash]
+    ReconStatus -->|Yes| PostWalletPayments[Mark as Paid and Archive]
 
     PostBankPayments --> NotifyEmployees[Send Payment Notifications]
     PostWalletPayments --> NotifyEmployees
     RequeuePayment --> NotifyEmployees
     ReprocessOrCash --> NotifyEmployees
 
-    NotifyEmployees --> BankReconciliation[Daily Bank/E-wallet Reconciliation]
+    NotifyEmployees --> BankReconciliation[Daily Bank or Ewallet Reconciliation]
     BankReconciliation --> ArchiveArtifacts[Archive Files, Receipts, Audit Logs]
     ArchiveArtifacts --> End([Digital Distribution Complete])
+
 ```
 
 ---
@@ -147,3 +148,4 @@ graph TD
 **Last Updated**: November 29, 2025  
 **Process Owner**: Payroll Department  
 **Status**: Future feature (configuration-ready)
+
