@@ -3,7 +3,7 @@
 ## Overview
 The RFID integration enables automated employee attendance tracking through card taps on edge devices, with events routed through an event bus to multiple modules.
 
-### **Patentable Proposal**: RFID Replayable Event-Log Verification Layer (/patentable-proposal/rfid-replayable-event-log-proposal.md)
+### [Patentable Proposal: RFID Replayable Event-Log Verification Layer](./patentable-proposal/rfid-replayable-event-log-proposal.md)
 
 
 **Architecture Pattern**: Event-Driven Architecture (Event Bus Pattern)
@@ -480,4 +480,5 @@ graph TD
 **Last Updated**: November 29, 2025  
 **Integration Owner**: Superadmin  
 **Technology**: RFID (125 kHz or 13.56 MHz) + Event Bus (Redis Pub/Sub or RabbitMQ)
+
 
