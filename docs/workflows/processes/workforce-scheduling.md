@@ -13,29 +13,30 @@ Operational workflow for defining schedules, planning rotations, creating daily 
 
 ```mermaid
 graph TD
-    Start([Scheduling Window Opens]) --> DefineSchedules[HR Manager Defines/Approves<br/>Work Schedules]
-    DefineSchedules --> CreateRotations[Create Rotation Patterns<br/>e.g., 4x2, Day/Night]
-    CreateRotations --> PlanWeek[HR Staff Plans Weekly<br/>Assignments by Team]
+    Start([Scheduling Window Opens]) --> DefineSchedules[HR Manager Defines or Approves\nWork Schedules]
+    DefineSchedules --> CreateRotations[Create Rotation Patterns\nExamples: 4x2, Day or Night]
+    CreateRotations --> PlanWeek[HR Staff Plans Weekly\nAssignments by Team]
 
-    PlanWeek --> ImportSupervisor[Import Supervisor Inputs<br/>(Paper → HR Entry)]
+    PlanWeek --> ImportSupervisor[Import Supervisor Inputs\nPaper to HR Entry]
     ImportSupervisor --> GenerateAssignments[Generate Daily Assignments]
-    GenerateAssignments --> DetectConflicts[Detect Conflicts<br/>(Overlaps, OT, Coverage)]
+    GenerateAssignments --> DetectConflicts[Detect Conflicts\nOverlaps, Overtime, Coverage]
 
     DetectConflicts --> ConflictFound{Conflicts Found?}
-    ConflictFound -->|Yes| ResolveConflicts[Resolve via Reassignment<br/>or Adjustments]
-    ConflictFound -->|No| ManagerReview[HR Manager Review & Approve]
+    ConflictFound -->|Yes| ResolveConflicts[Resolve via Reassignment\nor Adjustments]
+    ConflictFound -->|No| ManagerReview[HR Manager Review and Approve]
 
     ResolveConflicts --> ManagerReview
     ManagerReview --> PublishAssignments[Publish Assignments]
 
-    PublishAssignments --> EmitToTimekeeping[Emit to Timekeeping<br/>for Validation]
+    PublishAssignments --> EmitToTimekeeping[Emit to Timekeeping\nfor Validation]
     EmitToTimekeeping --> NotifyPayroll[Notify Payroll for Premiums]
-    NotifyPayroll --> UpdateDashboards[Update Coverage/OT Dashboards]
+    NotifyPayroll --> UpdateDashboards[Update Coverage and Overtime Dashboards]
 
     UpdateDashboards --> DayChanges{Daily Changes?}
-    DayChanges -->|Yes| SameDayAdjust[Same-Day Adjustments<br/>and Re-approval]
+    DayChanges -->|Yes| SameDayAdjust[Same Day Adjustments\nand Reapproval]
     DayChanges -->|No| End([Process Complete])
     SameDayAdjust --> DetectConflicts
+
 ```
 
 ---
@@ -122,3 +123,4 @@ graph TD
 **Last Updated**: November 29, 2025  
 **Process Owner**: HR Department  
 **Cadence**: Weekly + daily adjustments
+
