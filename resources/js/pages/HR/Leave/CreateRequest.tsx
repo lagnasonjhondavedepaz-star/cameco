@@ -146,6 +146,7 @@ export default function CreateRequest({ employees = [], leaveTypes = [] }: Creat
                                             value={String(form.data.end_date)}
                                             onChange={(e) => form.setData('end_date', e.target.value)}
                                             required
+                                            min={form.data.start_date ? String(form.data.start_date) : undefined}
                                         />
                                         {form.errors.end_date && <div className="text-sm text-red-500">{form.errors.end_date}</div>}
                                     </div>
