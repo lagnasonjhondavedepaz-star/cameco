@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 // LeaveBalance model will be implemented later as part of balances feature
 use App\Models\LeaveRequest;
+use App\Models\LeaveBalance;
 use App\Models\LeavePolicy;
 use Illuminate\Http\Request;
 use App\Http\Requests\HR\Leave\StoreLeaveRequestRequest;
@@ -278,6 +279,49 @@ class LeaveRequestController extends Controller
         // start and end dates (+1)
         $daysRequested = (int) ($endDate->diffInDays($startDate, true) + 1);
 
+        // STEP 3.5: Check leave balance (prevent filing when remaining is 0) unless policy is Emergency
+        $year = $startDate->year;
+        $policy = LeavePolicy::find($validated['leave_policy_id']);
+
+        // determine if this is an emergency leave policy (allow filing regardless of balance)
+        $policyName = strtolower((string) ($policy?->name ?? ''));
+        $policyCode = strtolower((string) ($policy?->code ?? ''));
+        $isEmergency = str_contains($policyName, 'emergency') || $policyCode === 'el';
+
+        // load existing balance if available
+        $balance = null;
+        try {
+            $balance = LeaveBalance::firstWhere([
+                'employee_id' => $validated['employee_id'],
+                'leave_policy_id' => $validated['leave_policy_id'],
+                'year' => $year,
+            ]);
+        } catch (\Exception $e) {
+            $balance = null;
+        }
+
+        if ($balance) {
+            $remaining = (float) $balance->remaining;
+            // Block filing when remaining is zero (unless emergency)
+            if (!$isEmergency && $remaining <= 0) {
+                return back()->withInput()->withErrors(['leave_policy_id' => 'Employee has no remaining balance for this leave type.']);
+            }
+
+            // Also prevent requesting more days than remaining (unless emergency)
+            if (!$isEmergency && $daysRequested > $remaining) {
+                return back()->withInput()->withErrors(['start_date' => 'Requested days exceed remaining balance for this leave type. Reduce days or select Emergency Leave.']);
+            }
+        } else {
+            // No balance record exists — use policy entitlement as starting remaining
+            $entitlement = $policy?->annual_entitlement ? (float) $policy->annual_entitlement : 0.0;
+            if (!$isEmergency && $entitlement <= 0) {
+                return back()->withInput()->withErrors(['leave_policy_id' => 'This leave type has no entitlement configured for the year.']);
+            }
+            if (!$isEmergency && $daysRequested > $entitlement) {
+                return back()->withInput()->withErrors(['start_date' => 'Requested days exceed entitlement for this leave type. Reduce days or select Emergency Leave.']);
+            }
+        }
+
         // NOTE: leave balance validation is a future enhancement once LeaveBalance model
         // and table are implemented. For now we skip balance checks and allow HR staff
         // to submit the request — HR will process/deduct balances during processing.
@@ -410,10 +454,51 @@ class LeaveRequestController extends Controller
                 // keep status pending until manager approves
             } else {
                 // Manager approval -> mark approved
+                $wasManagerAlreadyApproved = $leaveRequest->manager_approved_at !== null;
                 $leaveRequest->manager_id = auth()->id();
                 $leaveRequest->manager_approved_at = now();
                 $leaveRequest->manager_comments = $validated['approval_comments'] ?? null;
                 $leaveRequest->status = 'approved';
+
+                // Only deduct from balance the first time manager approves
+                if (!$wasManagerAlreadyApproved) {
+                    try {
+                        $policyId = $leaveRequest->leave_policy_id;
+                        $employeeId = $leaveRequest->employee_id;
+                        $year = \Carbon\Carbon::parse($leaveRequest->start_date)->year;
+
+                        $policy = $leaveRequest->leavePolicy;
+
+                        // Find existing balance for the year and policy
+                        $balance = LeaveBalance::firstWhere([
+                            'employee_id' => $employeeId,
+                            'leave_policy_id' => $policyId,
+                            'year' => $year,
+                        ]);
+
+                        if (!$balance) {
+                            $earned = $policy?->annual_entitlement ? (float) $policy->annual_entitlement : 0.0;
+                            $balance = LeaveBalance::create([
+                                'employee_id' => $employeeId,
+                                'leave_policy_id' => $policyId,
+                                'year' => $year,
+                                'earned' => $earned,
+                                'used' => 0.0,
+                                'remaining' => $earned,
+                                'carried_forward' => 0.0,
+                            ]);
+                        }
+
+                        // Deduct requested days
+                        $days = (float) $leaveRequest->days_requested;
+                        $balance->used = (float) $balance->used + $days;
+                        $balance->remaining = (float) $balance->earned - (float) $balance->used;
+                        $balance->save();
+                    } catch (\Exception $e) {
+                        // don't block approval on balance failure — log and continue
+                        logger()->error('Failed to update leave balance on approval: ' . $e->getMessage());
+                    }
+                }
             }
         } else {
             // Reject (supervisor or manager): set rejection details and status
