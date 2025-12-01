@@ -62,10 +62,19 @@ class RolesAndPermissionsSeeder extends Seeder
             // Timekeeping
             'hr.timekeeping.view',
             'hr.timekeeping.manage',
+            'hr.timekeeping.attendance.view',
             'hr.timekeeping.attendance.create',
             'hr.timekeeping.attendance.update',
+            'hr.timekeeping.attendance.delete',
+            'hr.timekeeping.attendance.correct',
             'hr.timekeeping.overtime.view',
+            'hr.timekeeping.overtime.create',
+            'hr.timekeeping.overtime.update',
+            'hr.timekeeping.overtime.delete',
             'hr.timekeeping.overtime.approve',
+            'hr.timekeeping.import.view',
+            'hr.timekeeping.import.create',
+            'hr.timekeeping.analytics.view',
 
             // ATS (Applicant Tracking)
             'hr.ats.view',
