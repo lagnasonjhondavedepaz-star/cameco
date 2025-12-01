@@ -56,7 +56,6 @@ export default function AssignmentsIndex() {
     const [viewMode, setViewMode] = useState<'list' | 'calendar' | 'analytics'>('list');
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-    const [ setIsBulkModalOpen] = useState(false);
     const [selectedAssignment, setSelectedAssignment] = useState<ShiftAssignment | null>(null);
     const [editingAssignment, setEditingAssignment] = useState<ShiftAssignment | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -195,7 +194,7 @@ export default function AssignmentsIndex() {
                             <div className="flex gap-2">
                                 <Button 
                                     variant="outline"
-                                    onClick={() => setIsBulkModalOpen(true)}
+                                    onClick={() => router.visit('/hr/workforce/assignments/bulk-assign')}
                                     className="gap-2"
                                 >
                                     <Plus className="h-4 w-4" />
