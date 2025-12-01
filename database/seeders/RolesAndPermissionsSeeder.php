@@ -172,14 +172,23 @@ class RolesAndPermissionsSeeder extends Seeder
             'hr.leave-policies.view', // Read-only access to policies
             'hr.leave-balances.view', // View leave balances
 
-            // Timekeeping (hr.* prefixed)
+            // Timekeeping (hr.* prefixed - full access for HR Staff)
             'hr.timekeeping.view',
             'hr.timekeeping.manage',
+            'hr.timekeeping.attendance.view',
             'hr.timekeeping.attendance.create',
             'hr.timekeeping.attendance.update',
+            'hr.timekeeping.attendance.delete',
+            'hr.timekeeping.attendance.correct',
             'hr.timekeeping.overtime.view',
+            'hr.timekeeping.overtime.create',
+            'hr.timekeeping.overtime.update',
+            'hr.timekeeping.overtime.delete',
+            'hr.timekeeping.import.view',
+            'hr.timekeeping.import.create',
+            'hr.timekeeping.analytics.view',
             
-            // Timekeeping (route permissions)
+            // Timekeeping (route permissions - backward compatibility)
             'timekeeping.attendance.view',
             'timekeeping.attendance.create',
             'timekeeping.attendance.update',
