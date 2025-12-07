@@ -15,8 +15,6 @@ import { ApplicationFilters } from '@/components/ats/application-filters';
 import { BulkActionsCard } from '@/components/ats/bulk-actions-card';
 import type { PageProps } from '@inertiajs/core';
 import type { Application, ApplicationSummary, ApplicationFilters as ApplicationFiltersType } from '@/types/ats-pages';
-import Heading from "@/components/heading";
-import HeadingSmall from "@/components/heading-small";
 import axios from 'axios';
 
 interface ApplicationsIndexProps extends PageProps {
@@ -226,8 +224,10 @@ export default function ApplicationsIndex({
       <Head title="Applications" />
 
       <div className="space-y-6 p-6">
-        <Heading>Applications</Heading>
-        <HeadingSmall>Manage and track job applications</HeadingSmall>
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight">Applications</h1>
+          <p className="text-muted-foreground mt-2">Manage and track job applications</p>
+        </div>
 
         {/* Summary Cards */}
         {statistics && (
@@ -346,7 +346,7 @@ export default function ApplicationsIndex({
             </div>
             <div>
               <label className="text-sm font-medium">Location</label>
-              <select className="mt-1 w-full border px-3 py-2 rounded" value={interviewFormData.location_type} onChange={(e) => setInterviewFormData({...interviewFormData, location_type: e.target.value as any})}>
+              <select className="mt-1 w-full border px-3 py-2 rounded" value={interviewFormData.location_type} onChange={(e) => setInterviewFormData({...interviewFormData, location_type: e.target.value as 'office' | 'video_call' | 'phone'})}>
                 <option value="office">Office</option>
                 <option value="video_call">Video Call</option>
                 <option value="phone">Phone</option>
