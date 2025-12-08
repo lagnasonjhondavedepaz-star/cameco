@@ -73,63 +73,50 @@ class RehireRecommendationController extends Controller
      */
     public function show($id)
     {
-        // Mock recommendation with details
-        $recommendation = [
-            'id' => 1,
-            'employee_id' => 1,
-            'employee_name' => 'Juan dela Cruz',
-            'employee_number' => 'EMP-2023-001',
-            'department_id' => 1,
-            'department_name' => 'Engineering',
-            'appraisal_id' => 1,
-            'cycle_name' => 'Annual Review 2025',
-            'recommendation' => 'eligible',
-            'recommendation_label' => 'Eligible for Rehire',
-            'recommendation_color' => 'bg-green-100 text-green-800',
-            'overall_score' => 8.2,
-            'attendance_rate' => 94.5,
-            'violation_count' => 0,
-            'notes' => 'Strong performer with excellent attendance record',
-            'is_overridden' => false,
-            'overridden_by' => null,
-            'created_at' => '2025-11-18 14:30:00',
-            'updated_at' => '2025-11-18 14:30:00',
-        ];
+        // Get all mock recommendations
+        $mockRecommendations = $this->getMockRehireRecommendations();
+        
+        // Find the recommendation by ID
+        $recommendation = collect($mockRecommendations)->firstWhere('id', (int)$id);
+        
+        if (!$recommendation) {
+            abort(404, 'Rehire recommendation not found');
+        }
 
-        // Mock appraisal data for breakdown
+        // Mock appraisal data for breakdown (varies by employee)
         $appraisal = [
-            'id' => 1,
-            'overall_score' => 8.2,
-            'scores' => [
-                ['criterion' => 'Quality of Work', 'score' => 8.0],
-                ['criterion' => 'Attendance & Punctuality', 'score' => 9.0],
-                ['criterion' => 'Behavior & Conduct', 'score' => 8.5],
-                ['criterion' => 'Productivity', 'score' => 7.5],
-                ['criterion' => 'Teamwork', 'score' => 8.0],
-            ],
+            'id' => $recommendation['appraisal_id'],
+            'overall_score' => $recommendation['overall_score'],
+            'scores' => $this->getMockAppraisalScores($recommendation['overall_score']),
         ];
 
         // Mock employee data
         $employee = [
-            'id' => 1,
-            'employee_number' => 'EMP-2023-001',
-            'first_name' => 'Juan',
-            'last_name' => 'dela Cruz',
-            'full_name' => 'Juan dela Cruz',
-            'department_id' => 1,
-            'department_name' => 'Engineering',
-            'email' => 'juan.delacruz@company.com',
+            'id' => $recommendation['employee_id'],
+            'employee_number' => $recommendation['employee_number'],
+            'first_name' => explode(' ', $recommendation['employee_name'])[0],
+            'last_name' => substr($recommendation['employee_name'], strpos($recommendation['employee_name'], ' ') + 1),
+            'full_name' => $recommendation['employee_name'],
+            'department_id' => $recommendation['department_id'],
+            'department_name' => $recommendation['department_name'],
+            'email' => strtolower(str_replace(' ', '.', $recommendation['employee_name'])) . '@company.com',
         ];
 
         // Mock attendance metrics
         $attendanceMetrics = [
-            'attendance_rate' => 94.5,
-            'lateness_count' => 2,
-            'violation_count' => 0,
+            'attendance_rate' => $recommendation['attendance_rate'],
+            'lateness_count' => $this->calculateLatenessCount($recommendation['attendance_rate']),
+            'violation_count' => $recommendation['violation_count'],
         ];
 
         // Mock override history
-        $overrideHistory = [];
+        $overrideHistory = $recommendation['is_overridden'] ? [[
+            'id' => 1,
+            'action' => 'Recommendation Override',
+            'reason' => 'Manual override by HR Manager',
+            'created_by' => $recommendation['overridden_by'],
+            'created_at' => $recommendation['updated_at'],
+        ]] : [];
 
         return Inertia::render('HR/RehireRecommendations/Show', [
             'recommendation' => $recommendation,
@@ -138,6 +125,35 @@ class RehireRecommendationController extends Controller
             'attendanceMetrics' => $attendanceMetrics,
             'overrideHistory' => $overrideHistory,
         ]);
+    }
+
+    /**
+     * Generate mock appraisal scores based on overall score
+     */
+    private function getMockAppraisalScores($overallScore)
+    {
+        // Generate varied scores around the overall score
+        $base = $overallScore;
+        $variance = 1.5;
+        
+        return [
+            ['criterion' => 'Quality of Work', 'score' => round($base + rand(-10, 10) / 10, 1)],
+            ['criterion' => 'Attendance & Punctuality', 'score' => round($base + rand(-5, 15) / 10, 1)],
+            ['criterion' => 'Behavior & Conduct', 'score' => round($base + rand(-8, 12) / 10, 1)],
+            ['criterion' => 'Productivity', 'score' => round($base + rand(-15, 10) / 10, 1)],
+            ['criterion' => 'Teamwork', 'score' => round($base + rand(-10, 10) / 10, 1)],
+        ];
+    }
+
+    /**
+     * Calculate lateness count based on attendance rate
+     */
+    private function calculateLatenessCount($attendanceRate)
+    {
+        if ($attendanceRate >= 95) return rand(0, 2);
+        if ($attendanceRate >= 90) return rand(2, 5);
+        if ($attendanceRate >= 85) return rand(5, 10);
+        return rand(10, 20);
     }
 
     /**
