@@ -1,0 +1,295 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\DocumentTemplate;
+use App\Models\User;
+use Illuminate\Database\Seeder;
+
+class DocumentTemplateSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     *
+     * @return void
+     */
+    public function run()
+    {
+        // Get or create a system admin user for document templates
+        $adminUser = User::where('role', 'admin')
+            ->orWhere('email', 'admin@syncingsteel.com')
+            ->first() ?? User::where('email', 'like', '%@%')->first();
+
+        if (!$adminUser) {
+            $this->command->warn('No admin user found. Seeders will fail. Create an admin user first.');
+            return;
+        }
+
+        $templates = [
+            [
+                'name' => 'Employment Contract',
+                'description' => 'Standard full-time employment contract for Philippine employees',
+                'template_type' => 'contract',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_address',
+                    'position',
+                    'department',
+                    'start_date',
+                    'salary',
+                    'payment_frequency',
+                    'company_name',
+                    'company_address',
+                    'supervisor_name',
+                    'employment_type',
+                    'end_date',
+                    'probation_period',
+                    'contract_number',
+                    'contract_date',
+                ],
+            ],
+            [
+                'name' => 'Job Offer Letter',
+                'description' => 'Job offer letter for new hires before employment contract',
+                'template_type' => 'offer_letter',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'candidate_name',
+                    'candidate_address',
+                    'position',
+                    'department',
+                    'start_date',
+                    'salary',
+                    'benefits',
+                    'company_name',
+                    'company_address',
+                    'hiring_manager_name',
+                    'hiring_manager_title',
+                    'job_offer_date',
+                    'acceptance_deadline',
+                    'job_description_summary',
+                    'reporting_to',
+                ],
+            ],
+            [
+                'name' => 'Certificate of Employment',
+                'description' => 'Certificate of Employment (COE) for employee credential requests',
+                'template_type' => 'coe',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_address',
+                    'employee_number',
+                    'position',
+                    'department',
+                    'start_date',
+                    'end_date',
+                    'employment_status',
+                    'salary',
+                    'company_name',
+                    'company_address',
+                    'company_phone',
+                    'ceo_name',
+                    'ceo_title',
+                    'hr_manager_name',
+                    'purpose',
+                    'issued_date',
+                ],
+            ],
+            [
+                'name' => 'Non-Disclosure Agreement',
+                'description' => 'NDA for protecting company confidential information',
+                'template_type' => 'other',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_address',
+                    'position',
+                    'department',
+                    'start_date',
+                    'company_name',
+                    'company_address',
+                    'nda_effective_date',
+                    'confidential_information_definition',
+                    'term_years',
+                    'authorized_representative_name',
+                    'authorized_representative_title',
+                    'acknowledgment_date',
+                    'witness_name',
+                ],
+            ],
+            [
+                'name' => 'Memorandum',
+                'description' => 'Memorandum for official communication and notices to employees',
+                'template_type' => 'memo',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'memo_to',
+                    'employee_name',
+                    'employee_position',
+                    'department',
+                    'memo_from',
+                    'from_position',
+                    'memo_date',
+                    'subject',
+                    'effective_date',
+                    'memo_body',
+                    'company_name',
+                    'reference_number',
+                ],
+            ],
+            [
+                'name' => 'Warning Letter',
+                'description' => 'Formal warning letter for disciplinary action and documentation',
+                'template_type' => 'warning',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_number',
+                    'employee_address',
+                    'position',
+                    'department',
+                    'violation_date',
+                    'warning_issued_date',
+                    'violation_description',
+                    'policy_violated',
+                    'corrective_action',
+                    'corrective_action_deadline',
+                    'consequences',
+                    'hr_manager_name',
+                    'supervisor_name',
+                    'warning_number',
+                    'notice_to_cure',
+                ],
+            ],
+            [
+                'name' => 'Clearance Form',
+                'description' => 'Exit clearance form for employee separation and turnover',
+                'template_type' => 'clearance',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_number',
+                    'employee_address',
+                    'position',
+                    'department',
+                    'last_working_day',
+                    'resignation_date',
+                    'clearance_date',
+                    'company_name',
+                    'equipment_list',
+                    'equipment_returned',
+                    'outstanding_amounts',
+                    'final_settlement_date',
+                    'hr_manager_name',
+                    'finance_manager_name',
+                    'department_head_name',
+                    'separation_type',
+                ],
+            ],
+            [
+                'name' => 'Resignation Acceptance Letter',
+                'description' => 'Formal acceptance of employee resignation',
+                'template_type' => 'resignation',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_number',
+                    'position',
+                    'department',
+                    'resignation_date',
+                    'effective_date',
+                    'last_working_day',
+                    'company_name',
+                    'company_address',
+                    'ceo_name',
+                    'hr_manager_name',
+                    'separation_benefits',
+                    'final_paycheck_date',
+                    'acceptance_date',
+                ],
+            ],
+            [
+                'name' => 'Termination Letter',
+                'description' => 'Formal termination notice for involuntary separation',
+                'template_type' => 'termination',
+                'status' => 'approved',
+                'is_active' => true,
+                'is_locked' => true,
+                'version' => 1,
+                'variables' => [
+                    'employee_name',
+                    'employee_number',
+                    'employee_address',
+                    'position',
+                    'department',
+                    'termination_date',
+                    'effective_date',
+                    'last_working_day',
+                    'termination_reason',
+                    'termination_type',
+                    'company_name',
+                    'company_address',
+                    'ceo_name',
+                    'hr_manager_name',
+                    'separation_benefits',
+                    'final_paycheck_date',
+                    'severance_amount',
+                    'notice_period_days',
+                    'termination_letter_date',
+                ],
+            ],
+        ];
+
+        foreach ($templates as $template) {
+            // Check if template already exists by name
+            if (!DocumentTemplate::where('name', $template['name'])->exists()) {
+                DocumentTemplate::create([
+                    'name' => $template['name'],
+                    'description' => $template['description'],
+                    'template_type' => $template['template_type'],
+                    'status' => $template['status'],
+                    'is_active' => $template['is_active'],
+                    'is_locked' => $template['is_locked'],
+                    'version' => $template['version'],
+                    'variables' => json_encode($template['variables']),
+                    'created_by' => $adminUser->id,
+                    'approved_by' => $adminUser->id,
+                    'approved_at' => now(),
+                    'file_path' => null, // Templates don't have actual files yet
+                ]);
+
+                $this->command->info("Created template: {$template['name']}");
+            } else {
+                $this->command->info("Template already exists: {$template['name']}");
+            }
+        }
+
+        $this->command->info('Document templates seeded successfully!');
+    }
+}

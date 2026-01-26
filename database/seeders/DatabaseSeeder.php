@@ -167,6 +167,11 @@ class DatabaseSeeder extends Seeder
             $this->call(\Database\Seeders\WorkforceSeeder::class);
         }
 
+        // Seed Document Management templates
+        if (class_exists(\Database\Seeders\DocumentTemplateSeeder::class)) {
+            $this->call(\Database\Seeders\DocumentTemplateSeeder::class);
+        }
+
     }
 
 
