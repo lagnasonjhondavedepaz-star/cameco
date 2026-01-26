@@ -60,17 +60,26 @@ class DocumentExpiryReminderService
      * @param User|null $user User initiating reminders (for audit logging)
      * @return int Count of reminders sent
      */
+
     public function sendReminderNotifications(?Collection $documents = null, ?User $user = null): int
     {
-        try {
+        try { 
             // Fetch expiring documents if not provided
             if ($documents === null) {
                 $documents = $this->checkExpiringDocuments();
             }
 
             $remindersSent = 0;
-            $hrManagerRole = User::query()->role('HR Manager')->get();
-            $hrStaffRole = User::query()->role('HR Staff')->get();
+            $hrManagerRole = User::query()
+                ->whereHas('roles', function ($query) {
+                    $query->where('name', 'HR Manager');
+                })
+                ->get();
+            $hrStaffRole = User::query()
+                ->whereHas('roles', function ($query) {
+                    $query->where('name', 'HR Staff');
+                })
+                ->get();
             $recipients = $hrManagerRole->merge($hrStaffRole)->unique('id');
 
             if ($recipients->isEmpty()) {
@@ -259,14 +268,13 @@ HTML;
     protected function formatDocumentListHtml(Collection $documents, string $color): string
     {
         $rows = $documents->map(function ($doc) use ($color) {
-            $severityClass = match ($doc->days_until_expiry) {
-                '<= 7' => 'badge-severe',
-                default => $doc->days_until_expiry <= 14 ? 'badge-moderate' : 'badge-warning',
-            };
-            $severityText = match ($doc->days_until_expiry) {
-                '<= 7' => 'SEVERE',
-                default => $doc->days_until_expiry <= 14 ? 'MODERATE' : 'WARNING',
-            };
+            $severityClass = $doc->days_until_expiry <= 7 
+                ? 'badge-severe' 
+                : ($doc->days_until_expiry <= 14 ? 'badge-moderate' : 'badge-warning');
+            
+            $severityText = $doc->days_until_expiry <= 7 
+                ? 'SEVERE' 
+                : ($doc->days_until_expiry <= 14 ? 'MODERATE' : 'WARNING');
 
             return <<<ROW
             <tr>
