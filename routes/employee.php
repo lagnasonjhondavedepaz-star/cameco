@@ -129,4 +129,29 @@ Route::middleware(['auth', 'verified', EnsureEmployee::class])
                 ->middleware('permission:employee.notifications.manage')
                 ->name('destroy');
         });
+
+        // ============================================================
+        // DOCUMENTS (Self-Service)
+        // ============================================================
+        Route::prefix('documents')->name('documents.')->group(function () {
+            // View own documents with filtering
+            Route::get('/', [\App\Http\Controllers\Employee\DocumentController::class, 'index'])
+                ->middleware('permission:employee.documents.view')
+                ->name('index');
+            
+            // Show document request form (Certificate of Employment, Payslip, 2316 Form, etc.)
+            Route::get('/request', [\App\Http\Controllers\Employee\DocumentController::class, 'createRequest'])
+                ->middleware('permission:employee.documents.request')
+                ->name('request.create');
+            
+            // Submit document request to HR Staff
+            Route::post('/request', [\App\Http\Controllers\Employee\DocumentController::class, 'storeRequest'])
+                ->middleware('permission:employee.documents.request')
+                ->name('request.store');
+            
+            // Download own document with logging
+            Route::get('/{document}/download', [\App\Http\Controllers\Employee\DocumentController::class, 'download'])
+                ->middleware('permission:employee.documents.download')
+                ->name('download');
+        });
     });
