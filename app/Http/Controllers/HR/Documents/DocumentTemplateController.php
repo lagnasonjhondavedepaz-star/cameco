@@ -397,6 +397,15 @@ class DocumentTemplateController extends Controller
 
         // Generate document content with variable substitution
         $documentContent = $this->generateDocumentContent($template, $substitutions);
+        
+        \Log::info('Document content generated', [
+            'template_id' => $template['id'],
+            'template_name' => $template['name'],
+            'original_content_length' => strlen($template['content']),
+            'substituted_content_length' => strlen($documentContent),
+            'substitutions_count' => count($substitutions),
+            'content_preview' => substr($documentContent, 0, 200)
+        ]);
 
         // Create filename
         $filename = 'document_' . $employee->employee_number . '_' . now()->format('Ymd_His');
@@ -481,6 +490,18 @@ class DocumentTemplateController extends Controller
         $content = '';
         if ($template->file_path && \Storage::exists($template->file_path)) {
             $content = \Storage::get($template->file_path);
+            \Log::info('Template file loaded', [
+                'template_id' => $id,
+                'file_path' => $template->file_path,
+                'content_length' => strlen($content),
+                'content_preview' => substr($content, 0, 100)
+            ]);
+        } else {
+            \Log::warning('Template file not found', [
+                'template_id' => $id,
+                'file_path' => $template->file_path,
+                'exists' => $template->file_path ? \Storage::exists($template->file_path) : false
+            ]);
         }
 
         return [
@@ -511,6 +532,12 @@ class DocumentTemplateController extends Controller
      */
     private function generatePdfContent($title, $content)
     {
+        \Log::info('PDF generation started', [
+            'title' => $title,
+            'content_length' => strlen($content),
+            'content_preview' => substr($content, 0, 200)
+        ]);
+        
         // Clean and escape content for PDF
         $escapedTitle = str_replace(['(', ')', '\\'], ['\\(', '\\)', '\\\\'], $title);
         $escapedContent = str_replace(['(', ')', '\\', "\r"], ['\\(', '\\)', '\\\\', ''], $content);
@@ -520,17 +547,16 @@ class DocumentTemplateController extends Controller
         
         // Build the text drawing commands
         $textCommands = "BT\n/F1 16 Tf\n50 750 Td\n($escapedTitle) Tj\n";
+        $textCommands .= "0 -30 TD\n"; // Move down from title
         $textCommands .= "/F1 10 Tf\n";
         
-        $yPosition = 720;
         foreach ($lines as $index => $line) {
             if ($index > 60) break; // Limit to ~60 lines per page for simplicity
             $line = trim($line);
             if (!empty($line)) {
-                $textCommands .= "50 $yPosition Td\n($line) Tj\n";
-                $yPosition -= 12;
+                $textCommands .= "($line) Tj\n0 -14 TD\n"; // Print line and move down
             } else {
-                $yPosition -= 12; // Empty line spacing
+                $textCommands .= "0 -14 TD\n"; // Empty line spacing
             }
         }
         $textCommands .= "ET\n";

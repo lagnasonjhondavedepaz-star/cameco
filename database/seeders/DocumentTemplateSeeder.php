@@ -289,7 +289,20 @@ class DocumentTemplateSeeder extends Seeder
                 $templateContent = $this->generateTemplateContent($template['name'], $template['variables']);
                 $filePath = "templates/{$documentTemplate->id}/{$documentTemplate->id}_" . Str::slug($template['name']) . ".txt";
                 
+                \Log::info('Creating template file', [
+                    'template_name' => $template['name'],
+                    'file_path' => $filePath,
+                    'content_length' => strlen($templateContent),
+                    'content_preview' => substr($templateContent, 0, 200)
+                ]);
+                
                 \Storage::put($filePath, $templateContent);
+                
+                \Log::info('File creation result', [
+                    'file_path' => $filePath,
+                    'exists' => \Storage::exists($filePath),
+                    'full_path' => storage_path('app/' . $filePath)
+                ]);
                 
                 // Update template with file path
                 $documentTemplate->update(['file_path' => $filePath]);
