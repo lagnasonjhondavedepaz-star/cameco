@@ -298,6 +298,11 @@ class DocumentTemplateController extends Controller
                 ];
             });
 
+        // Calculate stats
+        $mostUsedTemplate = \App\Models\DocumentTemplate::where('is_active', true)
+            ->orderBy('version', 'desc')
+            ->first();
+        
         $this->logAudit(
             'document_templates.api_list',
             'info',
@@ -310,6 +315,16 @@ class DocumentTemplateController extends Controller
             'meta' => [
                 'total_templates' => $templates->count(),
                 'active_templates' => $templates->where('status', 'approved')->count(),
+                'most_used_template' => $mostUsedTemplate ? [
+                    'id' => $mostUsedTemplate->id,
+                    'name' => $mostUsedTemplate->name,
+                    'usage_count' => 0, // Would need tracking in production
+                ] : [
+                    'id' => 0,
+                    'name' => 'No Templates',
+                    'usage_count' => 0,
+                ],
+                'generated_this_month' => 0, // Would need tracking in production
             ]
         ]);
     }

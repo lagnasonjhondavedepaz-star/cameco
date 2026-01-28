@@ -278,7 +278,17 @@ export default function TemplatesIndex({ templates: initialTemplates, stats: ini
 
             const result = await response.json();
             setTemplates(result.data || mockTemplates);
-            setStats(result.meta || mockStats);
+            
+            // Merge with mock stats to ensure all required fields exist
+            const newStats = {
+                ...mockStats,
+                ...(result.meta || {}),
+                most_used_template: {
+                    ...mockStats.most_used_template,
+                    ...(result.meta?.most_used_template || {}),
+                },
+            };
+            setStats(newStats);
             setLoading(false);
         } catch (err) {
             console.error('Error fetching templates:', err);
@@ -530,9 +540,9 @@ export default function TemplatesIndex({ templates: initialTemplates, stats: ini
                             <TrendingUp className="h-5 w-5 text-blue-500" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold truncate">{stats.most_used_template.name}</div>
+                            <div className="text-2xl font-bold truncate">{stats?.most_used_template?.name || 'No Data'}</div>
                             <p className="text-xs text-muted-foreground">
-                                {stats.most_used_template.usage_count} generations
+                                {stats?.most_used_template?.usage_count || 0} generations
                             </p>
                         </CardContent>
                     </Card>
