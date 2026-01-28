@@ -42,7 +42,7 @@ class DocumentTemplateController extends Controller
 
         // Get employees list for document generation with full details
         $employees = \App\Models\Employee::with(['profile:id,first_name,last_name,email', 'department:id,name', 'position:id,title'])
-            ->select('id', 'employee_number', 'profile_id', 'department_id', 'position_id', 'date_hired', 'basic_salary')
+            ->select('id', 'employee_number', 'profile_id', 'department_id', 'position_id', 'date_hired')
             ->where('status', 'active')
             ->orderBy('employee_number')
             ->get()
@@ -384,7 +384,6 @@ class DocumentTemplateController extends Controller
             'current_date' => now()->format('F d, Y'),
             'company_name' => config('app.name', 'SyncingSteel HRIS'),
             'company_address' => '123 Business St, Makati City, Metro Manila, Philippines',
-            'salary' => $employee->basic_salary ?? 'N/A',
             'tin' => $employee->profile->tin ?? 'N/A',
             'sss_number' => $employee->profile->sss_number ?? 'N/A',
             'philhealth_number' => $employee->profile->philhealth_number ?? 'N/A',
