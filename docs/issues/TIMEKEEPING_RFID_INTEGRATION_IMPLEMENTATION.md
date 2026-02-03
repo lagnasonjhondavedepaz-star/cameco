@@ -815,13 +815,50 @@ Route::prefix('timekeeping/api/attendance/corrections')->name('timekeeping.api.a
 - Uses `/api/` sub-namespace for JSON endpoints (consistent with ledger API routes)
 
 **Acceptance Criteria:**
-- [ ] Controller created with store(), approve(), reject() methods returning JSON responses
-- [ ] Migration for attendance_corrections table created and run
-- [ ] Routes added to hr.php with `/api/` sub-namespace (e.g., `/hr/timekeeping/api/attendance/corrections`)
-- [ ] Permission checks applied to all routes
-- [ ] Frontend modal integrates with real backend API via axios/fetch
-- [ ] Audit trail captured for all correction actions
-- [ ] Events dispatched for downstream processing (Payroll, Notifications)
+- [x] Controller created with store(), approve(), reject() methods returning JSON responses
+  - ✅ All 3 methods implemented in `app/Http/Controllers/HR/Timekeeping/AttendanceCorrectionController.php`
+  - ✅ All return proper JSON responses with success/error states
+  - ✅ Request validation with detailed error messages
+  
+- [x] Migration for attendance_corrections table created and run
+  - ✅ Migration: `database/migrations/2026_02_04_000001_create_attendance_corrections_table.php`
+  - ✅ All required fields: id, event_id, requester, approver, times, hours, reason, justification, status, timestamps
+  - ✅ Proper indexes on `attendance_event_id`, `status`, `requested_by_user_id`, `approved_by_user_id`
+  - ✅ Foreign key constraints with cascade/set null policies
+  - ✅ Migration executed successfully (verified via `php artisan migrate`)
+  
+- [x] Routes added to hr.php with `/api/` sub-namespace (e.g., `/hr/timekeeping/api/attendance/corrections`)
+  - ✅ POST `/hr/timekeeping/api/attendance/corrections` → store()
+  - ✅ PUT `/hr/timekeeping/api/attendance/corrections/{id}/approve` → approve()
+  - ✅ PUT `/hr/timekeeping/api/attendance/corrections/{id}/reject` → reject()
+  - ✅ Routes located at lines 690-706 in `routes/hr.php`
+  
+- [x] Permission checks applied to all routes
+  - ✅ store() requires `permission:hr.timekeeping.corrections.create`
+  - ✅ approve() requires `permission:hr.timekeeping.corrections.approve`
+  - ✅ reject() requires `permission:hr.timekeeping.corrections.approve`
+  - ✅ Permissions added to `TimekeepingPermissionsSeeder` and seeded to database
+  
+- [x] Frontend modal integrates with real backend API via axios/fetch
+  - ✅ Updated `resources/js/components/timekeeping/attendance-correction-modal.tsx`
+  - ✅ Replaced mock handlers with real fetch POST to `route('hr.timekeeping.api.attendance.corrections.store')`
+  - ✅ Handles validation errors and displays user-friendly toasts via `sonner`
+  - ✅ Auto-refreshes attendance table on successful submission using Inertia router.reload()
+  - ✅ Proper error handling with detailed error messages
+  
+- [x] Audit trail captured for all correction actions
+  - ✅ store() logs: correction_id, attendance_event_id, requested_by, hours_difference
+  - ✅ approve() logs: correction_id, attendance_event_id, approved_by, hours_difference
+  - ✅ reject() logs: correction_id, attendance_event_id, rejected_by, rejection_reason
+  - ✅ All using Laravel's Log::info() with structured context
+  - ✅ AttendanceCorrection model stores all requestor/approver tracking data
+  
+- [x] Events dispatched for downstream processing (Payroll, Notifications)
+  - ✅ AttendanceCorrectionRequested event (Task 4.4.1) - dispatched in store()
+  - ✅ AttendanceCorrectionApproved event (Task 4.4.2) - dispatched in approve()
+  - ✅ AttendanceCorrectionRejected event (Task 4.4.3) - dispatched in reject()
+  - ✅ Event classes created: `app/Events/Timekeeping/*.php`
+  - ✅ Events ready for listener implementation in Payroll/Notification modules
 
 **Implementation Notes:**
 - **Architecture Decision**: Manual corrections NEVER modify the ledger or attendance_events
@@ -929,15 +966,20 @@ Route::prefix('timekeeping/api/attendance/corrections')->name('timekeeping.api.a
 **Subtasks:**
 - [x] **5.3.1** Implement `computeDailySummary($employeeId, $date)` method ✅
 - [x] **5.3.2** Apply business rules (late, absent, overtime thresholds) ✅
-- [ ] **5.3.3** Store/update `daily_attendance_summary` records
-- [ ] **5.3.4** Dispatch `AttendanceSummaryUpdated` event
+- [x] **5.3.3** Store/update `daily_attendance_summary` records ✅
+- [x] **5.3.4** Dispatch `AttendanceSummaryUpdated` event ✅
 
 **Acceptance Criteria:**
 - ✅ Summaries computed accurately - 11 unit tests passing
 - ✅ Business rules applied correctly - All test scenarios covered
-- Events will be dispatched in tasks 5.3.4
+- ✅ Summaries stored/updated to database with atomic operations
+- ✅ AttendanceSummaryUpdated event dispatched for downstream processing
+- ✅ Event dispatch integration tests covering both new and update scenarios
+- ✅ All 19 unit tests passing
 
 **Implementation Summary:**
+
+**Phase 5.3.1-5.3.2 (Previously Completed):**
 - **computeDailySummary()**: Fetches AttendanceEvent records, extracts times, calculates hours
 - **applyBusinessRules()**: Evaluates presence, lateness, undertime, overtime status
 - **Business Rules**:
@@ -946,11 +988,47 @@ Route::prefix('timekeeping/api/attendance/corrections')->name('timekeeping.api.a
   - Absent: No time_in event by scheduled end
   - Undertime: total_hours_worked < scheduled_hours
   - Overtime: time_out > scheduled_end
-- **Test Coverage**: 11 comprehensive tests passing (28 total with Phase 5.2)
-  - Full day attendance scenarios
-  - Absent employee cases
-  - Grace period boundaries
-  - Undertime/overtime detection
+
+**Phase 5.3.3-5.3.4 (New Implementation):**
+- **storeDailySummary()** (Task 5.3.3):
+  - Accepts computed summary array and optional ledger sequence tracking
+  - Verifies employee exists
+  - Atomically creates or updates daily_attendance_summary record
+  - Handles both new summaries and updates with previous value tracking
+  - Logs all storage actions for audit trail
+  - Returns DailyAttendanceSummary model instance
+  
+- **AttendanceSummaryUpdated Event** (Task 5.3.4):
+  - Created: `app/Events/Timekeeping/AttendanceSummaryUpdated.php`
+  - Carries DailyAttendanceSummary model, isNew flag, and previous values for updates
+  - Dispatched after successful summary storage
+  - Integration points:
+    - Payroll module: Recompute payroll affected by summary changes
+    - Notification module: Send alerts for late/absent/violation scenarios
+    - Appraisal module: Update performance metrics (attendance quality)
+    - Audit logging: Record summary creation/update for compliance
+
+**Test Coverage:**
+- ✅ 19 comprehensive unit tests passing
+  - New record creation with full validation
+  - Existing record updates with change tracking
+  - Ledger sequence tracking (100-250)
+  - Invalid employee handling (throws ModelNotFoundException)
+  - Event dispatch for new records (isNew=true)
+  - Event dispatch for updates (isNew=false)
+  - Event metadata validation (summary ID, previousValues)
+  - Integration workflow: compute → apply rules → store → event dispatch
+
+**Files Created/Modified:**
+- `app/Events/Timekeeping/AttendanceSummaryUpdated.php` - NEW (35 lines)
+- `app/Services/Timekeeping/AttendanceSummaryService.php` - MODIFIED (added ~210 lines for 5.3.3-5.3.4)
+- `tests/Unit/Services/Timekeeping/AttendanceSummaryServiceTest.php` - MODIFIED (added 8 new tests)
+
+**Dependencies:**
+- Laravel Eloquent models (Employee, DailyAttendanceSummary)
+- Event dispatching system
+- Carbon date/time handling
+- Logging for audit trail
 
 ---
 

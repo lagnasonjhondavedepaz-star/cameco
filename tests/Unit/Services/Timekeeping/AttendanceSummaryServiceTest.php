@@ -338,4 +338,298 @@ class AttendanceSummaryServiceTest extends TestCase
         
         $this->assertEquals(0, $threshold);
     }
+
+    /**
+     * Task 5.3.3: Test storeDailySummary() creates new attendance summary record
+     */
+    public function test_store_daily_summary_creates_new_record(): void
+    {
+        $date = Carbon::now()->startOfDay();
+
+        // Create attendance events and compute summary
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('08:05'),
+            'event_type' => 'time_in',
+        ]);
+
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('12:00'),
+            'event_type' => 'break_start',
+        ]);
+
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('13:00'),
+            'event_type' => 'break_end',
+        ]);
+
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('17:30'),
+            'event_type' => 'time_out',
+        ]);
+
+        // Compute and apply business rules
+        $summary = $this->service->computeDailySummary($this->employee->id, $date);
+        $summary = $this->service->applyBusinessRules($summary);
+
+        // Store to database
+        $record = $this->service->storeDailySummary($summary);
+
+        // Verify record was created
+        $this->assertNotNull($record->id);
+        // Check database record exists by querying directly due to date format differences
+        $dbRecord = DailyAttendanceSummary::where('employee_id', $this->employee->id)
+            ->whereDate('attendance_date', $date->toDateString())
+            ->first();
+        $this->assertNotNull($dbRecord);
+        $this->assertTrue($dbRecord->is_present);
+        $this->assertFalse($dbRecord->is_late);
+    }
+
+    /**
+     * Task 5.3.3: Test storeDailySummary() updates existing record
+     */
+    public function test_store_daily_summary_updates_existing_record(): void
+    {
+        $date = Carbon::now()->startOfDay();
+
+        // Create initial summary in database
+        $initialRecord = DailyAttendanceSummary::create([
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:00'),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:00'),
+            'total_hours_worked' => 8,
+            'is_present' => true,
+            'is_late' => false,
+        ]);
+
+        // Create new summary data with updated times
+        $updatedSummary = [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:05')->toDateTimeString(),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:30')->toDateTimeString(),
+            'total_hours_worked' => 8.5,
+            'is_present' => true,
+            'is_late' => false,  // 8:05 is within grace period
+            'break_duration' => 60,
+        ];
+
+        // Store updated summary
+        $record = $this->service->storeDailySummary($updatedSummary);
+
+        // Verify record was updated, not duplicated
+        $this->assertEquals($initialRecord->id, $record->id);
+        $this->assertDatabaseCount('daily_attendance_summary', 1);
+        
+        // Verify updated values
+        $dbRecord = DailyAttendanceSummary::find($record->id);
+        $this->assertEquals(8.5, $dbRecord->total_hours_worked);
+        $this->assertFalse($dbRecord->is_late);
+    }
+
+    /**
+     * Task 5.3.3: Test storeDailySummary() with ledger sequence tracking
+     */
+    public function test_store_daily_summary_with_ledger_sequence(): void
+    {
+        $date = Carbon::now()->startOfDay();
+
+        $summary = [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:00')->toDateTimeString(),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:00')->toDateTimeString(),
+            'total_hours_worked' => 8,
+            'is_present' => true,
+            'is_late' => false,
+        ];
+
+        // Store with ledger sequence tracking
+        $record = $this->service->storeDailySummary($summary, 100, 250);
+
+        // Verify ledger sequence was stored
+        $dbRecord = DailyAttendanceSummary::find($record->id);
+        $this->assertEquals(100, $dbRecord->ledger_sequence_start);
+        $this->assertEquals(250, $dbRecord->ledger_sequence_end);
+    }
+
+    /**
+     * Task 5.3.3: Test storeDailySummary() throws when employee doesn't exist
+     */
+    public function test_store_daily_summary_throws_for_invalid_employee(): void
+    {
+        $this->expectException(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+
+        $summary = [
+            'employee_id' => 99999,  // Non-existent employee
+            'attendance_date' => Carbon::now()->toDateString(),
+            'is_present' => false,
+        ];
+
+        $this->service->storeDailySummary($summary);
+    }
+
+    /**
+     * Task 5.3.4: Test storeDailySummary() dispatches AttendanceSummaryUpdated event
+     */
+    public function test_store_daily_summary_dispatches_event(): void
+    {
+        \Illuminate\Support\Facades\Event::fake();
+
+        $date = Carbon::now()->startOfDay();
+
+        $summary = [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:00')->toDateTimeString(),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:00')->toDateTimeString(),
+            'total_hours_worked' => 8,
+            'is_present' => true,
+            'is_late' => false,
+        ];
+
+        // Store summary and verify event is dispatched
+        $record = $this->service->storeDailySummary($summary);
+
+        \Illuminate\Support\Facades\Event::assertDispatched(
+            \App\Events\Timekeeping\AttendanceSummaryUpdated::class,
+            function ($event) use ($record) {
+                return $event->summary->id === $record->id;
+            }
+        );
+    }
+
+    /**
+     * Task 5.3.4: Test storeDailySummary() dispatches event with isNew flag for new records
+     */
+    public function test_store_daily_summary_event_marks_as_new(): void
+    {
+        \Illuminate\Support\Facades\Event::fake();
+
+        $date = Carbon::now()->startOfDay();
+
+        $summary = [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:00')->toDateTimeString(),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:00')->toDateTimeString(),
+            'total_hours_worked' => 8,
+            'is_present' => true,
+        ];
+
+        $this->service->storeDailySummary($summary);
+
+        \Illuminate\Support\Facades\Event::assertDispatched(
+            \App\Events\Timekeeping\AttendanceSummaryUpdated::class,
+            function ($event) {
+                return $event->isNew === true;
+            }
+        );
+    }
+
+    /**
+     * Task 5.3.4: Test storeDailySummary() dispatches event with isNew=false for updates
+     */
+    public function test_store_daily_summary_event_marks_as_update(): void
+    {
+        \Illuminate\Support\Facades\Event::fake();
+
+        $date = Carbon::now()->startOfDay();
+
+        // Create initial record
+        $existing = DailyAttendanceSummary::create([
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:00'),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:00'),
+            'total_hours_worked' => 8,
+            'is_present' => true,
+            'is_late' => false,
+        ]);
+
+        // Clear event queue
+        \Illuminate\Support\Facades\Event::fake();
+
+        // Update existing record
+        $updatedSummary = [
+            'employee_id' => $this->employee->id,
+            'attendance_date' => $date->toDateString(),
+            'work_schedule_id' => $this->schedule->id,
+            'time_in' => $date->copy()->setTimeFromTimeString('08:05')->toDateTimeString(),
+            'time_out' => $date->copy()->setTimeFromTimeString('17:30')->toDateTimeString(),
+            'total_hours_worked' => 8.5,
+            'is_present' => true,
+            'is_late' => false,
+        ];
+
+        $record = $this->service->storeDailySummary($updatedSummary);
+
+        // Verify this is an update (same ID as original)
+        $this->assertEquals($existing->id, $record->id);
+
+        \Illuminate\Support\Facades\Event::assertDispatched(
+            \App\Events\Timekeeping\AttendanceSummaryUpdated::class,
+            function ($event) {
+                return $event->isNew === false;
+            }
+        );
+    }
+
+    /**
+     * Task 5.3.3-5.3.4: Integration test - compute, apply rules, store, and verify event
+     */
+    public function test_full_summary_workflow_with_event_dispatch(): void
+    {
+        \Illuminate\Support\Facades\Event::fake();
+
+        $date = Carbon::now()->startOfDay();
+
+        // Create simple attendance events with minimal data
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('08:00'),
+            'event_type' => 'time_in',
+        ]);
+
+        AttendanceEvent::factory()->create([
+            'employee_id' => $this->employee->id,
+            'event_date' => $date,
+            'event_time' => $date->copy()->setTimeFromTimeString('17:00'),
+            'event_type' => 'time_out',
+        ]);
+
+        // Full workflow: compute → apply rules → store → verify
+        $summary = $this->service->computeDailySummary($this->employee->id, $date);
+        $summary = $this->service->applyBusinessRules($summary);
+        $record = $this->service->storeDailySummary($summary, 100, 200);
+
+        // Verify basic summary data
+        $this->assertTrue($record->is_present);  // Has time_in
+
+        // Verify event was dispatched with correct metadata
+        \Illuminate\Support\Facades\Event::assertDispatched(
+            \App\Events\Timekeeping\AttendanceSummaryUpdated::class,
+            function ($event) use ($record) {
+                return $event->summary->id === $record->id &&
+                       $event->isNew === true &&
+                       $event->previousValues === null;
+            }
+        );
+    }
 }

@@ -256,9 +256,10 @@ class LedgerHealthController extends Controller
         }
         
         if ($status === 'critical') {
+            $seqEnd = $metrics['last_sequence_id'] + 5;
             $alerts[] = [
                 'severity' => 'critical',
-                'message' => "Hash verification failed for sequence range {$metrics['last_sequence_id']}-{$metrics['last_sequence_id'] + 5}",
+                'message' => "Hash verification failed for sequence range {$metrics['last_sequence_id']}-{$seqEnd}",
                 'timestamp' => now()->subMinutes(10)->toISOString(),
             ];
             $alerts[] = [

@@ -101,9 +101,6 @@ export default function EmployeeTimeline({
     function route(arg0: string): string | import("@inertiajs/core").UrlMethodPair | undefined {
         throw new Error('Function not implemented.');
     }
-    const route = (name: string, params?: Record<string, any>) => {
-        return window.route(name, params);
-    };
 
     return (
         <AppLayout>

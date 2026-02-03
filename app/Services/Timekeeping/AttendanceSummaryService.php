@@ -2,12 +2,14 @@
 
 namespace App\Services\Timekeeping;
 
+use App\Events\Timekeeping\AttendanceSummaryUpdated;
 use App\Models\AttendanceEvent;
 use App\Models\DailyAttendanceSummary;
 use App\Models\Employee;
 use App\Models\WorkSchedule;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 /**
  * AttendanceSummaryService
@@ -436,4 +438,176 @@ class AttendanceSummaryService
     {
         return self::OVERTIME_THRESHOLD_MINUTES;
     }
+
+    /**
+     * Task 5.3.3: Store or update computed daily attendance summary in database.
+     * 
+     * Takes a computed summary array (from computeDailySummary + applyBusinessRules),
+     * saves to daily_attendance_summary table, and dispatches AttendanceSummaryUpdated event.
+     * 
+     * Handles both creation and updates:
+     * - New summary: Creates new DailyAttendanceSummary record
+     * - Existing summary: Updates existing record with new calculated values
+     * 
+     * @param array $summary Computed summary array with all fields
+     * @param int|null $ledgerSequenceStart Optional: Starting ledger sequence ID
+     * @param int|null $ledgerSequenceEnd Optional: Ending ledger sequence ID
+     * @return DailyAttendanceSummary The created/updated summary model
+     * 
+     * @throws \Exception If employee or work schedule not found
+     * 
+     * @example
+     * $summary = $this->computeDailySummary(1, Carbon::parse('2024-01-15'));
+     * $summary = $this->applyBusinessRules($summary);
+     * $record = $this->storeDailySummary($summary, 100, 250); // Save to DB with ledger sequence
+     * // Fires: AttendanceSummaryUpdated event
+     * // Returns: DailyAttendanceSummary model instance
+     */
+    public function storeDailySummary(
+        array $summary,
+        ?int $ledgerSequenceStart = null,
+        ?int $ledgerSequenceEnd = null
+    ): DailyAttendanceSummary {
+        try {
+            $employeeId = $summary['employee_id'];
+            $attendanceDate = $summary['attendance_date'];
+
+            // Verify employee exists
+            $employee = Employee::findOrFail($employeeId);
+
+            // Parse attendance_date to ensure consistent format
+            if (is_string($attendanceDate)) {
+                $attendanceDateParsed = Carbon::parse($attendanceDate)->toDateString();
+            } else {
+                $attendanceDateParsed = $attendanceDate->toDateString();
+            }
+
+            // Prepare data for storage - map computed summary to database columns
+            $storageData = [
+                'work_schedule_id' => $summary['work_schedule_id'] ?? null,
+                'time_in' => $summary['time_in'] ?? null,
+                'time_out' => $summary['time_out'] ?? null,
+                'break_start' => $summary['break_start'] ?? null,
+                'break_end' => $summary['break_end'] ?? null,
+                'total_hours_worked' => $summary['total_hours_worked'] ?? null,
+                'regular_hours' => $summary['regular_hours'] ?? null,
+                'overtime_hours' => $summary['overtime_hours'] ?? null,
+                'break_duration' => $summary['break_duration'] ?? null,
+                'is_present' => $summary['is_present'] ?? false,
+                'is_late' => $summary['is_late'] ?? false,
+                'is_undertime' => $summary['is_undertime'] ?? false,
+                'is_overtime' => $summary['is_overtime'] ?? false,
+                'late_minutes' => $summary['late_minutes'] ?? null,
+                'undertime_minutes' => $summary['undertime_minutes'] ?? null,
+                'is_on_leave' => $summary['is_on_leave'] ?? false,
+                'ledger_sequence_start' => $ledgerSequenceStart,
+                'ledger_sequence_end' => $ledgerSequenceEnd,
+                'calculated_at' => Carbon::now(),
+            ];
+
+            // Check if summary already exists for this date
+            $existingRecord = DailyAttendanceSummary::where('employee_id', $employeeId)
+                ->whereDate('attendance_date', $attendanceDateParsed)
+                ->first();
+
+            // Determine if this is a new record (for event dispatch)
+            $isNew = $existingRecord === null;
+            $previousValues = null;
+
+            // For updates, capture previous values for change tracking
+            if ($existingRecord) {
+                $previousValues = $existingRecord->only(array_keys($storageData));
+                // Update existing record
+                $existingRecord->update($storageData);
+                $summaryRecord = $existingRecord->fresh();
+            } else {
+                // Create new record
+                $storageData['employee_id'] = $employeeId;
+                $storageData['attendance_date'] = $attendanceDateParsed;
+                $summaryRecord = DailyAttendanceSummary::create($storageData);
+            }
+
+            // Log the storage action for audit trail
+            Log::info('Daily attendance summary stored', [
+                'employee_id' => $employeeId,
+                'attendance_date' => $attendanceDate,
+                'is_new' => $isNew,
+                'summary_id' => $summaryRecord->id,
+                'is_present' => $summaryRecord->is_present,
+                'is_late' => $summaryRecord->is_late,
+                'is_overtime' => $summaryRecord->is_overtime,
+            ]);
+
+            // Dispatch AttendanceSummaryUpdated event for downstream processing
+            $this->dispatchSummaryUpdated($summaryRecord, $isNew, $previousValues);
+
+            return $summaryRecord;
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('Failed to store attendance summary: Employee not found', [
+                'employee_id' => $summary['employee_id'] ?? 'unknown',
+                'attendance_date' => $summary['attendance_date'] ?? 'unknown',
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        } catch (\Exception $e) {
+            Log::error('Failed to store attendance summary', [
+                'employee_id' => $summary['employee_id'] ?? 'unknown',
+                'attendance_date' => $summary['attendance_date'] ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Task 5.3.4: Dispatch AttendanceSummaryUpdated event for downstream processing.
+     * 
+     * Called after storeDailySummary() to trigger event listeners in:
+     * - Payroll module: Recalculate affected payroll period
+     * - Notification module: Send alerts for late/absent/violation scenarios
+     * - Appraisal module: Update performance metrics (attendance quality)
+     * - Audit logging: Record summary for compliance tracking
+     * 
+     * Event carries the summary model and metadata about the change
+     * (is_new flag, previous values for change tracking).
+     * 
+     * @param DailyAttendanceSummary $summary The attendance summary model
+     * @param bool $isNew True if this is a new record, false if updated
+     * @param array|null $previousValues Previous field values for change tracking
+     * @return void
+     * 
+     * @example
+     * // Called internally by storeDailySummary
+     * $this->dispatchSummaryUpdated($summaryRecord, true, null);
+     * // Triggers: Payroll recalculation, Notifications, Appraisal updates
+     */
+    private function dispatchSummaryUpdated(
+        DailyAttendanceSummary $summary,
+        bool $isNew = false,
+        ?array $previousValues = null
+    ): void {
+        try {
+            // Dispatch the event with summary model and metadata
+            AttendanceSummaryUpdated::dispatch($summary, $isNew, $previousValues);
+
+            Log::info('Attendance summary updated event dispatched', [
+                'summary_id' => $summary->id,
+                'employee_id' => $summary->employee_id,
+                'attendance_date' => $summary->attendance_date,
+                'is_new' => $isNew,
+                'event' => AttendanceSummaryUpdated::class,
+            ]);
+
+        } catch (\Exception $e) {
+            // Log dispatch failure but don't throw - event dispatch should not fail the summary save
+            Log::warning('Failed to dispatch AttendanceSummaryUpdated event', [
+                'summary_id' => $summary->id ?? 'unknown',
+                'employee_id' => $summary->employee_id ?? 'unknown',
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
 }
