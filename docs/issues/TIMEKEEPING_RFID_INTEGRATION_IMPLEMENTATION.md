@@ -755,14 +755,14 @@ POST /hr/timekeeping/api/ledger/sync     ? LedgerSyncController@trigger
 **Purpose:** Handle manual corrections to attendance records with audit trail and approval workflow.
 
 **Subtasks:**
-- [ ] **4.4.1** Create `store()` method to submit a new correction request:
+- [x] **4.4.1** Create `store()` method to submit a new correction request:
   - Accept: `attendance_id`, `corrected_time_in`, `corrected_time_out`, `corrected_break_start`, `corrected_break_end`, `correction_reason`, `justification`
   - Validate all fields (minimum 10 characters for justification)
   - Calculate hours difference between original and corrected times
   - Create `AttendanceCorrection` record with status 'pending'
   - Dispatch `AttendanceCorrectionRequested` event
   - Return JSON response with success status
-- [ ] **4.4.2** Create `approve()` method for HR Manager approval:
+- [x] **4.4.2** Create `approve()` method for HR Manager approval:
   - Accept: `correction_id`
   - Verify requester has `hr.timekeeping.corrections.approve` permission
   - Update correction status to 'approved'
@@ -776,10 +776,10 @@ POST /hr/timekeeping/api/ledger/sync     ? LedgerSyncController@trigger
   - Store rejection reason
   - Dispatch `AttendanceCorrectionRejected` event
   - Return JSON response
-- [ ] **4.4.4** Add permission checks:
+- [x] **4.4.4** Add permission checks:
   - `hr.timekeeping.corrections.create` for store()
   - `hr.timekeeping.corrections.approve` for approve()/reject()
-- [ ] **4.4.5** Create migration for `attendance_corrections` table:
+- [x] **4.4.5** Create migration for `attendance_corrections` table:
   - Fields: `id`, `attendance_event_id`, `requested_by_user_id`, `approved_by_user_id`, `original_time_in`, `original_time_out`, `corrected_time_in`, `corrected_time_out`, `corrected_break_start`, `corrected_break_end`, `hours_difference`, `correction_reason`, `justification`, `rejection_reason`, `status` (pending/approved/rejected), `requested_at`, `processed_at`
   - Indexes on `attendance_event_id`, `status`, `requested_by_user_id`
 

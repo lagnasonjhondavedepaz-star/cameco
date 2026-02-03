@@ -59,7 +59,7 @@ Route::middleware(['auth', 'verified' , EnsureHRAccess::class])
 
         // Employee-Specific Document API Routes (for Employee Profile → Documents Tab)
         // These routes are scoped to a single employee context
-        Route::prefix('api/hr/employees/{employeeId}/documents')->name('api.employees.documents.')->group(function () {
+        Route::prefix('employees/{employeeId}/api/documents')->name('api.employees.documents.')->group(function () {
             Route::get('/', [EmployeeDocumentController::class, 'index'])
                 ->middleware('permission:hr.documents.view')
                 ->name('index');
@@ -684,6 +684,26 @@ Route::middleware(['auth', 'verified' , EnsureHRAccess::class])
                 Route::get('/devices/{deviceId}', [LedgerDeviceController::class, 'show'])
                     ->middleware('permission:hr.timekeeping.attendance.view')
                     ->name('device');
+            });
+
+            // Attendance Correction API Routes (JSON Responses)
+            // Task 4.4: Manual correction workflow with audit trail
+            // =======================================================
+            Route::prefix('api/attendance/corrections')->name('api.attendance.corrections.')->group(function () {
+                // Submit new correction request
+                Route::post('/', [\App\Http\Controllers\HR\Timekeeping\AttendanceCorrectionController::class, 'store'])
+                    ->middleware('permission:hr.timekeeping.corrections.create')
+                    ->name('store');
+                
+                // Approve correction request
+                Route::put('/{id}/approve', [\App\Http\Controllers\HR\Timekeeping\AttendanceCorrectionController::class, 'approve'])
+                    ->middleware('permission:hr.timekeeping.corrections.approve')
+                    ->name('approve');
+                
+                // Reject correction request
+                Route::put('/{id}/reject', [\App\Http\Controllers\HR\Timekeeping\AttendanceCorrectionController::class, 'reject'])
+                    ->middleware('permission:hr.timekeeping.corrections.approve')
+                    ->name('reject');
             });
 
             // Overtime Management

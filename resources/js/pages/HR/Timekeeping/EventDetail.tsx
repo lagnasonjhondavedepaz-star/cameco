@@ -79,6 +79,20 @@ export default function EventDetail({ event, relatedEvents }: EventDetailProps) 
         return variants[type] || 'default';
     };
 
+    const route = (name: string, params?: Record<string, string | number> | number | string): string => {
+        // This would typically come from window.route if using Laravel Inertia
+        // For now, return a basic implementation
+        if (!params) {
+            return `/app/${name.replace(/\./g, '/')}`;
+        }
+        
+        const paramStr = typeof params === 'object' 
+            ? `/${Object.values(params).join('/')}`
+            : `/${params}`;
+        
+        return `/app/${name.replace(/\./g, '/')}${paramStr}`;
+    };
+
     return (
         <AppLayout>
             <Head title={`Event #${event.sequence_id} - Ledger Detail`} />

@@ -22,6 +22,10 @@ class TimekeepingPermissionsSeeder extends Seeder
             'timekeeping.attendance.correct',
             'timekeeping.attendance.bulk_entry',
 
+            // Attendance Correction Permissions (Task 4.4)
+            'hr.timekeeping.corrections.create',
+            'hr.timekeeping.corrections.approve',
+
             // Overtime Permissions
             'timekeeping.overtime.view',
             'timekeeping.overtime.create',
