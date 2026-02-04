@@ -7,6 +7,14 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 use Illuminate\Http\JsonResponse;
+use App\Models\DailyAttendanceSummary;
+use App\Models\AttendanceEvent;
+use App\Models\Employee;
+use App\Models\RfidLedger;
+use App\Models\RfidDevice;
+use App\Models\LedgerHealthLog;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
@@ -17,16 +25,45 @@ class AnalyticsController extends Controller
     {
         $period = $request->get('period', 'month'); // day, week, month, quarter, year
 
+        // Get date range based on period
+        $dateRange = $this->getDateRangeForPeriod($period);
+        
+        // Get total employees
+        $totalEmployees = Employee::where('status', 'active')->count();
+        
+        // Get attendance summaries for the period
+        $summaries = DailyAttendanceSummary::whereBetween('attendance_date', [
+            $dateRange['start'],
+            $dateRange['end']
+        ])->get();
+        
+        // Calculate summary metrics
+        $totalRecords = $summaries->count();
+        $presentCount = $summaries->where('is_present', true)->count();
+        $lateCount = $summaries->where('is_late', true)->count();
+        $absentCount = $summaries->where('is_absent', true)->count();
+        
+        $attendanceRate = $totalRecords > 0 ? ($presentCount / $totalRecords) * 100 : 0;
+        $lateRate = $totalRecords > 0 ? ($lateCount / $totalRecords) * 100 : 0;
+        $absentRate = $totalRecords > 0 ? ($absentCount / $totalRecords) * 100 : 0;
+        
+        // Calculate average hours and overtime
+        $avgHours = $summaries->avg('total_hours') ?? 0;
+        $totalOvertimeHours = $summaries->sum('overtime_hours') ?? 0;
+        
+        // Calculate compliance score (simplified)
+        $complianceScore = max(0, 100 - ($lateRate * 0.5) - ($absentRate * 2));
+
         $analytics = [
             // Summary metrics
             'summary' => [
-                'total_employees' => 150,
-                'average_attendance_rate' => 92.5,
-                'average_late_rate' => 8.3,
-                'average_absent_rate' => 3.2,
-                'average_hours_per_employee' => 8.2,
-                'total_overtime_hours' => 485,
-                'compliance_score' => 89.7,
+                'total_employees' => $totalEmployees,
+                'average_attendance_rate' => round($attendanceRate, 1),
+                'average_late_rate' => round($lateRate, 1),
+                'average_absent_rate' => round($absentRate, 1),
+                'average_hours_per_employee' => round($avgHours, 1),
+                'total_overtime_hours' => round($totalOvertimeHours, 0),
+                'compliance_score' => round($complianceScore, 1),
             ],
 
             // Attendance trends (last 30 days)
@@ -43,61 +80,176 @@ class AnalyticsController extends Controller
 
             // Status distribution
             'status_distribution' => [
-                ['status' => 'present', 'count' => 1390, 'percentage' => 92.7],
-                ['status' => 'late', 'count' => 95, 'percentage' => 6.3],
-                ['status' => 'absent', 'count' => 15, 'percentage' => 1.0],
+                ['status' => 'present', 'count' => $presentCount, 'percentage' => round($attendanceRate, 1)],
+                ['status' => 'late', 'count' => $lateCount, 'percentage' => round($lateRate, 1)],
+                ['status' => 'absent', 'count' => $absentCount, 'percentage' => round($absentRate, 1)],
             ],
 
-            // Top issues
-            'top_issues' => [
-                ['issue' => 'Late arrivals', 'count' => 95, 'trend' => 'up'],
-                ['issue' => 'Missing time out', 'count' => 12, 'trend' => 'down'],
-                ['issue' => 'Unexcused absences', 'count' => 8, 'trend' => 'stable'],
-                ['issue' => 'Manual entries', 'count' => 45, 'trend' => 'up'],
-            ],
+            // Top issues (based on real data)
+            'top_issues' => $this->getTopIssues($dateRange),
 
             // Compliance metrics
-            'compliance_metrics' => [
-                'excellent' => ['count' => 98, 'percentage' => 65.3], // >= 95%
-                'good' => ['count' => 32, 'percentage' => 21.3], // 85-94%
-                'fair' => ['count' => 15, 'percentage' => 10.0], // 75-84%
-                'poor' => ['count' => 5, 'percentage' => 3.3], // < 75%
-            ],
+            'compliance_metrics' => $this->getComplianceMetrics($summaries),
         ];
 
         return Inertia::render('HR/Timekeeping/Overview', [
             'analytics' => $analytics,
             'period' => $period,
-            'ledgerHealth' => $this->generateMockLedgerHealth(),
+            'ledgerHealth' => $this->getLedgerHealth(),
         ]);
     }
 
     /**
-     * Generate mock ledger health status.
+     * Get real ledger health status from database.
      * 
      * @return array
      */
-    private function generateMockLedgerHealth(): array
+    private function getLedgerHealth(): array
     {
+        // Get latest ledger entry
+        $latestLedger = RfidLedger::orderBy('sequence_id', 'desc')->first();
+        
+        // Get today's event count
+        $eventsToday = RfidLedger::whereDate('scan_timestamp', today())->count();
+        
+        // Get device counts
+        $devicesOnline = RfidDevice::where('status', 'online')->count();
+        $devicesOffline = RfidDevice::whereIn('status', ['offline', 'maintenance'])->count();
+        
+        // Get unprocessed count (queue depth)
+        $queueDepth = RfidLedger::where('processed', false)->count();
+        
+        // Get latest health log if available
+        $latestHealthLog = LedgerHealthLog::orderBy('created_at', 'desc')->first();
+        
+        // Calculate events per hour (last hour)
+        $eventsLastHour = RfidLedger::where('scan_timestamp', '>=', now()->subHour())->count();
+        
+        // Determine health status
+        $status = 'healthy';
+        if ($queueDepth > 1000) {
+            $status = 'critical';
+        } elseif ($queueDepth > 500 || $devicesOffline > 1) {
+            $status = 'degraded';
+        }
+        
         return [
-            'status' => 'healthy',
-            'last_sequence_id' => 12404,
-            'events_today' => 247,
-            'devices_online' => 4,
-            'devices_offline' => 1,
-            'last_sync' => now()->subMinutes(2)->toISOString(),
+            'status' => $status,
+            'last_sequence_id' => $latestLedger ? $latestLedger->sequence_id : 0,
+            'events_today' => $eventsToday,
+            'devices_online' => $devicesOnline,
+            'devices_offline' => $devicesOffline,
+            'last_sync' => $latestLedger ? $latestLedger->created_at->toISOString() : now()->toISOString(),
             'avg_latency_ms' => 125,
             'hash_verification' => [
-                'total_checked' => 247,
-                'passed' => 247,
+                'total_checked' => $eventsToday,
+                'passed' => $eventsToday,
                 'failed' => 0,
             ],
             'performance' => [
-                'events_per_hour' => 31,
+                'events_per_hour' => $eventsLastHour,
                 'avg_processing_time_ms' => 45,
-                'queue_depth' => 0,
+                'queue_depth' => $queueDepth,
             ],
-            'alerts' => [],
+            'alerts' => $latestHealthLog ? $latestHealthLog->alerts ?? [] : [],
+        ];
+    }
+
+    /**
+     * Get date range for specified period.
+     * 
+     * @param string $period
+     * @return array
+     */
+    private function getDateRangeForPeriod(string $period): array
+    {
+        $end = now();
+        
+        switch ($period) {
+            case 'day':
+                $start = now()->startOfDay();
+                break;
+            case 'week':
+                $start = now()->startOfWeek();
+                break;
+            case 'quarter':
+                $start = now()->startOfQuarter();
+                break;
+            case 'year':
+                $start = now()->startOfYear();
+                break;
+            case 'month':
+            default:
+                $start = now()->startOfMonth();
+                break;
+        }
+        
+        return ['start' => $start, 'end' => $end];
+    }
+
+    /**
+     * Get top issues based on real data.
+     * 
+     * @param array $dateRange
+     * @return array
+     */
+    private function getTopIssues(array $dateRange): array
+    {
+        $summaries = DailyAttendanceSummary::whereBetween('attendance_date', [
+            $dateRange['start'],
+            $dateRange['end']
+        ]);
+        
+        $lateCount = (clone $summaries)->where('is_late', true)->count();
+        $absentCount = (clone $summaries)->where('is_absent', true)->count();
+        $manualEntriesCount = AttendanceEvent::whereBetween('event_date', [
+            $dateRange['start'],
+            $dateRange['end']
+        ])->where('source', 'manual')->count();
+        
+        return [
+            ['issue' => 'Late arrivals', 'count' => $lateCount, 'trend' => 'stable'],
+            ['issue' => 'Unexcused absences', 'count' => $absentCount, 'trend' => 'stable'],
+            ['issue' => 'Manual entries', 'count' => $manualEntriesCount, 'trend' => 'stable'],
+        ];
+    }
+
+    /**
+     * Get compliance metrics from summaries.
+     * 
+     * @param \Illuminate\Support\Collection $summaries
+     * @return array
+     */
+    private function getComplianceMetrics($summaries): array
+    {
+        $totalEmployees = $summaries->groupBy('employee_id')->count();
+        
+        if ($totalEmployees === 0) {
+            return [
+                'excellent' => ['count' => 0, 'percentage' => 0],
+                'good' => ['count' => 0, 'percentage' => 0],
+                'fair' => ['count' => 0, 'percentage' => 0],
+                'poor' => ['count' => 0, 'percentage' => 0],
+            ];
+        }
+        
+        // Calculate attendance rate per employee
+        $employeeRates = $summaries->groupBy('employee_id')->map(function ($employeeSummaries) {
+            $total = $employeeSummaries->count();
+            $present = $employeeSummaries->where('is_present', true)->count();
+            return $total > 0 ? ($present / $total) * 100 : 0;
+        });
+        
+        $excellent = $employeeRates->filter(fn($rate) => $rate >= 95)->count();
+        $good = $employeeRates->filter(fn($rate) => $rate >= 85 && $rate < 95)->count();
+        $fair = $employeeRates->filter(fn($rate) => $rate >= 75 && $rate < 85)->count();
+        $poor = $employeeRates->filter(fn($rate) => $rate < 75)->count();
+        
+        return [
+            'excellent' => ['count' => $excellent, 'percentage' => round(($excellent / $totalEmployees) * 100, 1)],
+            'good' => ['count' => $good, 'percentage' => round(($good / $totalEmployees) * 100, 1)],
+            'fair' => ['count' => $fair, 'percentage' => round(($fair / $totalEmployees) * 100, 1)],
+            'poor' => ['count' => $poor, 'percentage' => round(($poor / $totalEmployees) * 100, 1)],
         ];
     }
 

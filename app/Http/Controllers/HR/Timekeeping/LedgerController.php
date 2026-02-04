@@ -7,6 +7,12 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Inertia\Inertia;
 use Inertia\Response;
+use App\Models\RfidLedger;
+use App\Models\AttendanceEvent;
+use App\Models\Employee;
+use App\Models\LedgerHealthLog;
+use App\Models\RfidDevice;
+use Carbon\Carbon;
 
 class LedgerController extends Controller
 {
@@ -21,38 +27,81 @@ class LedgerController extends Controller
     public function index(Request $request): Response
     {
         $perPage = $request->get('per_page', 20);
-        $page = $request->get('page', 1);
         
-        // Generate mock time logs
-        $allLogs = $this->generateMockTimeLogs();
+        // Build query for rfid_ledger with filters (eager load relationships)
+        $query = RfidLedger::with([
+            'employee:id,employee_number,profile_id',
+            'employee.profile:id,first_name,last_name',
+            'device:id,device_id,device_name,location'
+        ])->orderBy('sequence_id', 'desc');
         
-        // Apply filters from request
-        $filteredLogs = $this->applyFilters($allLogs, $request);
+        // Apply filters
+        if ($request->filled('date_from')) {
+            $query->where('scan_timestamp', '>=', Carbon::parse($request->date_from)->startOfDay());
+        }
         
-        // Paginate results
-        $logs = collect($filteredLogs)
-            ->forPage($page, $perPage)
-            ->values()
-            ->toArray();
+        if ($request->filled('date_to')) {
+            $query->where('scan_timestamp', '<=', Carbon::parse($request->date_to)->endOfDay());
+        }
         
-        // Generate pagination meta
-        $total = count($filteredLogs);
-        $lastPage = ceil($total / $perPage);
+        if ($request->filled('device_id') && $request->device_id !== 'all') {
+            $query->where('device_id', $request->device_id);
+        }
+        
+        if ($request->filled('event_type')) {
+            $query->where('event_type', $request->event_type);
+        }
+        
+        if ($request->filled('employee_rfid')) {
+            $query->where('employee_rfid', $request->employee_rfid);
+        }
+        
+        if ($request->filled('employee_search')) {
+            $search = $request->employee_search;
+            $query->whereHas('employee', function ($q) use ($search) {
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('last_name', 'like', "%{$search}%")
+                  ->orWhere('employee_id', 'like', "%{$search}%");
+            });
+        }
+        
+        // Paginate
+        $logs = $query->paginate($perPage);
+        
+        // Transform for frontend
+        $transformedLogs = $logs->getCollection()->map(function ($log) {
+            $employee = $log->employee;
+            return [
+                'id' => $log->id,
+                'sequence_id' => $log->sequence_id,
+                'employee_id' => $employee ? $employee->employee_number : 'Unknown',
+                'employee_name' => $employee ? "{$employee->profile->first_name} {$employee->profile->last_name}" : 'Unknown Employee',
+                'event_type' => $log->event_type,
+                'timestamp' => $log->scan_timestamp->toISOString(),
+                'device_id' => $log->device_id,
+                'device_location' => $log->device && $log->device->location ? $log->device->location : $log->device_id,
+                'verified' => $log->processed,
+                'rfid_card' => '****-' . substr($log->employee_rfid, -4),
+                'hash_chain' => $log->hash_chain,
+                'latency_ms' => null,
+                'source' => 'edge_machine',
+            ];
+        });
         
         return Inertia::render('HR/Timekeeping/Ledger', [
             'logs' => [
-                'data' => $logs,
-                'current_page' => (int) $page,
-                'per_page' => $perPage,
-                'total' => $total,
-                'last_page' => $lastPage,
-                'from' => ($page - 1) * $perPage + 1,
-                'to' => min($page * $perPage, $total),
-                'next_page_url' => $page < $lastPage ? route('timekeeping.ledger.index', ['page' => $page + 1]) : null,
-                'prev_page_url' => $page > 1 ? route('timekeeping.ledger.index', ['page' => $page - 1]) : null,
+                'data' => $transformedLogs,
+                'current_page' => $logs->currentPage(),
+                'per_page' => $logs->perPage(),
+                'total' => $logs->total(),
+                'last_page' => $logs->lastPage(),
+                'from' => $logs->firstItem(),
+                'to' => $logs->lastItem(),
+                'next_page_url' => $logs->nextPageUrl(),
+                'prev_page_url' => $logs->previousPageUrl(),
             ],
-            'ledgerHealth' => $this->generateMockLedgerHealth(),
-            'devices' => $this->generateMockDeviceStatus(),
+            'ledgerHealth' => $this->getLedgerHealth(),
+            'devices' => $this->getDeviceStatus(),
             'filters' => [
                 'date_from' => $request->get('date_from'),
                 'date_to' => $request->get('date_to'),
@@ -267,88 +316,94 @@ class LedgerController extends Controller
     }
 
     /**
-     * Generate mock ledger health status.
+     * Get real ledger health status from database.
      * 
      * @return array
      */
-    private function generateMockLedgerHealth(): array
+    private function getLedgerHealth(): array
     {
+        // Get latest ledger entry
+        $latestLedger = RfidLedger::orderBy('sequence_id', 'desc')->first();
+        
+        // Get today's event count
+        $eventsToday = RfidLedger::whereDate('scan_timestamp', today())->count();
+        
+        // Get device counts
+        $devicesOnline = RfidDevice::where('status', 'online')->count();
+        $devicesOffline = RfidDevice::whereIn('status', ['offline', 'maintenance'])->count();
+        
+        // Get unprocessed count (queue depth)
+        $queueDepth = RfidLedger::where('processed', false)->count();
+        
+        // Get latest health log if available
+        $latestHealthLog = LedgerHealthLog::orderBy('created_at', 'desc')->first();
+        
+        // Calculate events per hour (last hour)
+        $eventsLastHour = RfidLedger::where('scan_timestamp', '>=', now()->subHour())->count();
+        
+        // Determine health status
+        $status = 'healthy';
+        if ($queueDepth > 1000) {
+            $status = 'critical';
+        } elseif ($queueDepth > 500 || $devicesOffline > 1) {
+            $status = 'degraded';
+        }
+        
         return [
-            'status' => 'healthy',
-            'last_sequence_id' => 12404,
-            'events_today' => 247,
-            'devices_online' => 4,
-            'devices_offline' => 1,
-            'last_sync' => now()->subMinutes(2)->toISOString(),
-            'avg_latency_ms' => 125,
+            'status' => $status,
+            'last_sequence_id' => $latestLedger ? $latestLedger->sequence_id : 0,
+            'events_today' => $eventsToday,
+            'devices_online' => $devicesOnline,
+            'devices_offline' => $devicesOffline,
+            'last_sync' => $latestLedger ? $latestLedger->created_at->toISOString() : now()->toISOString(),
+            'avg_latency_ms' => 125, // TODO: Calculate from actual metrics
             'hash_verification' => [
-                'total_checked' => 247,
-                'passed' => 247,
+                'total_checked' => $eventsToday,
+                'passed' => $eventsToday, // TODO: Calculate from hash validation results
                 'failed' => 0,
             ],
             'performance' => [
-                'events_per_hour' => 31,
-                'avg_processing_time_ms' => 45,
-                'queue_depth' => 0,
+                'events_per_hour' => $eventsLastHour,
+                'avg_processing_time_ms' => 45, // TODO: Calculate from processing metrics
+                'queue_depth' => $queueDepth,
             ],
-            'alerts' => [],
+            'alerts' => $latestHealthLog ? $latestHealthLog->alerts ?? [] : [],
         ];
     }
 
     /**
-     * Generate mock device status.
+     * Get real device status from database.
      * 
      * @return array
      */
-    private function generateMockDeviceStatus(): array
+    private function getDeviceStatus(): array
     {
-        return [
-            [
-                'device_id' => 'GATE-01',
-                'device_name' => 'Gate 1 Reader',
-                'location' => 'Gate 1 - Main Entrance',
-                'status' => 'online',
-                'last_heartbeat' => now()->subMinutes(1)->toISOString(),
-                'events_today' => 87,
-                'uptime_percentage' => 99.8,
-            ],
-            [
-                'device_id' => 'GATE-02',
-                'device_name' => 'Gate 2 Reader',
-                'location' => 'Gate 2 - Side Entrance',
-                'status' => 'online',
-                'last_heartbeat' => now()->subMinutes(1)->toISOString(),
-                'events_today' => 45,
-                'uptime_percentage' => 99.5,
-            ],
-            [
-                'device_id' => 'CAFETERIA-01',
-                'device_name' => 'Cafeteria Reader',
-                'location' => 'Cafeteria',
-                'status' => 'online',
-                'last_heartbeat' => now()->subMinutes(2)->toISOString(),
-                'events_today' => 62,
-                'uptime_percentage' => 98.9,
-            ],
-            [
-                'device_id' => 'WAREHOUSE-01',
-                'device_name' => 'Warehouse Reader',
-                'location' => 'Warehouse Entry',
-                'status' => 'online',
-                'last_heartbeat' => now()->subMinutes(3)->toISOString(),
-                'events_today' => 34,
-                'uptime_percentage' => 97.2,
-            ],
-            [
-                'device_id' => 'OFFICE-01',
-                'device_name' => 'Office Reader',
-                'location' => 'Office Floor',
-                'status' => 'offline',
-                'last_heartbeat' => now()->subHours(2)->toISOString(),
-                'events_today' => 19,
-                'uptime_percentage' => 85.3,
-            ],
-        ];
+        $devices = RfidDevice::all();
+        
+        return $devices->map(function ($device) {
+            // Get today's event count for this device
+            $eventsToday = RfidLedger::where('device_id', $device->device_id)
+                ->whereDate('scan_timestamp', today())
+                ->count();
+            
+            // Calculate uptime percentage (simplified - based on last heartbeat)
+            $minutesSinceHeartbeat = $device->last_heartbeat ? 
+                now()->diffInMinutes($device->last_heartbeat) : 9999;
+            $uptimePercentage = $minutesSinceHeartbeat < 10 ? 99.5 : 
+                ($minutesSinceHeartbeat < 60 ? 95.0 : 85.0);
+            
+            return [
+                'device_id' => $device->device_id,
+                'device_name' => $device->device_name,
+                'location' => $device->location,
+                'status' => $device->status,
+                'last_heartbeat' => $device->last_heartbeat ? 
+                    $device->last_heartbeat->toISOString() : 
+                    now()->subHours(24)->toISOString(),
+                'events_today' => $eventsToday,
+                'uptime_percentage' => $uptimePercentage,
+            ];
+        })->toArray();
     }
 
     /**
