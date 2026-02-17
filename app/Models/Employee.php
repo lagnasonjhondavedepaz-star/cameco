@@ -143,6 +143,15 @@ class Employee extends Model
     }
 
     /**
+     * Get all RFID badge mappings for this employee.
+     * Added for Phase 2 Task 2.3: Badge Management Controller
+     */
+    public function rfidCardMappings()
+    {
+        return $this->hasMany(RfidCardMapping::class);
+    }
+
+    /**
      * Scope a query to only include active employees.
      */
     public function scopeActive($query)

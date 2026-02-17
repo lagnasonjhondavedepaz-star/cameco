@@ -18,6 +18,9 @@ class LeavePolicy extends Model
         'description',
         'annual_entitlement',
         'max_carryover',
+        'max_carryover_days',
+        'carryover_conversion',
+        'employee_type_config',
         'can_carry_forward',
         'is_paid',
         'is_active',
@@ -27,6 +30,7 @@ class LeavePolicy extends Model
     protected $casts = [
         'annual_entitlement' => 'decimal:1',
         'max_carryover' => 'decimal:1',
+        'employee_type_config' => 'array',
         'can_carry_forward' => 'boolean',
         'is_paid' => 'boolean',
         'is_active' => 'boolean',
@@ -54,7 +58,7 @@ class LeavePolicy extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['code', 'name', 'description', 'annual_entitlement', 'max_carryover', 'can_carry_forward', 'is_paid', 'is_active', 'effective_date'])
+            ->logOnly(['code', 'name', 'description', 'annual_entitlement', 'max_carryover', 'max_carryover_days', 'carryover_conversion', 'employee_type_config', 'can_carry_forward', 'is_paid', 'is_active', 'effective_date'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn(string $eventName) => "Leave policy '{$this->name}' {$eventName}");

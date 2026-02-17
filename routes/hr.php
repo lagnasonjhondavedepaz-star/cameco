@@ -766,6 +766,66 @@ Route::middleware(['auth', 'verified' , EnsureHRAccess::class])
                 ->middleware('permission:hr.timekeeping.import.view')
                 ->name('import.errors');
 
+            // RFID Badge Management (Phase 1.5)
+            // Task 1.1.1 & 1.1.2: Badge Management Layout with Stats Dashboard
+            Route::get('/badges', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'index'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.index');
+            Route::post('/badges', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'store'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.store');
+            Route::get('/badges/create', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'create'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.create');
+
+            // Task 1.7: Badge Bulk Import Routes (must come before {badge} routes)
+            Route::post('/badges/validate-import', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'validateImport'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.validate-import');
+            Route::post('/badges/bulk-import', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'bulkImport'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.bulk-import');
+
+            // Task 1.6: Badge Report & Export (must come before {badge} routes)
+            Route::post('/badges/export', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'export'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.export');
+
+            // Task 1.8: Employees Without Badges Report (must come before {badge} routes)
+            Route::get('/badges/reports/employees-without-badges', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'employeesWithoutBadges'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.reports.employees-without-badges');
+
+            // Task 2.9: Inactive Badges Report (must come before {badge} routes)
+            Route::get('/badges/reports/inactive', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'inactiveBadges'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.reports.inactive');
+
+            // Badge Detail Routes (with {badge} parameter)
+            Route::get('/badges/{badge}', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'show'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.show');
+
+            // Task 2.3.3: Badge Usage History
+            Route::get('/badges/{badge}/history', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'history'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.history');
+
+            // Task 2.9: Badge Analytics Endpoint
+            Route::get('/badges/{badge}/analytics', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'analytics'])
+                ->middleware('permission:hr.timekeeping.badges.view')
+                ->name('badges.analytics');
+
+            // Task 2.3.4: Badge Deactivation
+            Route::post('/badges/{badge}/deactivate', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'deactivate'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.deactivate');
+
+            // Task 2.3.5: Badge Replacement
+            Route::post('/badges/{badge}/replace', [\App\Http\Controllers\HR\Timekeeping\RfidBadgeController::class, 'replace'])
+                ->middleware('permission:hr.timekeeping.badges.manage')
+                ->name('badges.replace');
+
             // Analytics & Reports
             Route::get('/overview', [TimekeepingAnalyticsController::class, 'overview'])
                 ->middleware('permission:hr.timekeeping.analytics.view')

@@ -22,11 +22,15 @@ class Department extends Model
         'code',
         'budget',
         'is_active',
+        'min_coverage_percentage',
+        'approval_chain_config',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
         'budget' => 'integer',
+        'min_coverage_percentage' => 'decimal:2',
+        'approval_chain_config' => 'array',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
         'deleted_at' => 'datetime',

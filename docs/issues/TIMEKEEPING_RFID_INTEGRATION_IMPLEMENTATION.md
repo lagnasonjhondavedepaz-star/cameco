@@ -5,7 +5,11 @@
 **Estimated Duration:** 4-5 weeks  
 **Target Users:** HR Staff, HR Manager, Employees (via RFID scan)  
 **Dependencies:** FastAPI RFID Server, PostgreSQL Ledger, Event Bus, Employee Module  
-**Related Modules:** Payroll, Performance Appraisal, Workforce Management, Notifications
+**Related Modules:** Payroll, Performance Appraisal, Workforce Management, Notifications  
+**Related Documents:**
+- [DEVICE_MANAGEMENT_IMPLEMENTATION.md](./DEVICE_MANAGEMENT_IMPLEMENTATION.md) - Device & Badge Management Implementation
+- [FASTAPI_RFID_SERVER_IMPLEMENTATION.md](./FASTAPI_RFID_SERVER_IMPLEMENTATION.md) - FastAPI RFID Server Setup
+- [TIMEKEEPING_MODULE_STATUS_REPORT.md](../TIMEKEEPING_MODULE_STATUS_REPORT.md) - Current Implementation Status
 
 ---
 
@@ -17,11 +21,12 @@ Implement an event-driven Timekeeping system that pulls time logs from an append
 1. Pull time logs from append-only PostgreSQL ledger (populated by FastAPI RFID server)
 2. Create dedicated Ledger page for replayable event stream (separate from Overview)
 3. Display overview analytics and summaries on Timekeeping Overview page
-4. Implement MVC architecture with mock data in controllers (no separate API service)
-5. Ensure data integrity with hash-chained, cryptographically verifiable events
-6. Support ledger replay for reconciliation and audit purposes on dedicated Ledger page
-7. Provide workforce coverage analytics and attendance monitoring
-8. Generate attendance summaries for payroll processing
+4. **Implement Device Management page for scanner registration and RFID badge assignment**
+5. Implement MVC architecture with mock data in controllers (no separate API service)
+6. Ensure data integrity with hash-chained, cryptographically verifiable events
+7. Support ledger replay for reconciliation and audit purposes on dedicated Ledger page
+8. Provide workforce coverage analytics and attendance monitoring
+9. Generate attendance summaries for payroll processing
 
 **Applied Implementation Decisions:**
 
@@ -45,8 +50,9 @@ Implement an event-driven Timekeeping system that pulls time logs from an append
 - Replay engine for reconciliation and integrity verification
 
 **Access Control:**
-- **HR Staff**: View all attendance, manual corrections, import management
-- **HR Manager**: View all attendance, approve corrections, analytics, export reports
+- **SuperAdmin**: Device/scanner registration and configuration (System domain)
+- **HR Staff**: Badge issuance, view attendance, manual corrections, import management
+- **HR Manager**: Badge management, view all attendance, approve corrections, analytics, export reports
 - **Employees**: No direct access (scan RFID only; view own records via future portal)
 - **System**: Automated ledger polling, event processing, and workflow gating
 

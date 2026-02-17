@@ -233,6 +233,12 @@ export function NavHR() {
             permission: 'hr.timekeeping.view',
         },
         {
+            title: 'RFID Badges',
+            icon: Shield,
+            href: '/hr/timekeeping/badges',
+            permission: 'hr.timekeeping.badges.view',
+        },
+        {
             title: 'Overtime Requests',
             icon: Clock,
             href: '/hr/timekeeping/overtime',

@@ -75,6 +75,11 @@ class DatabaseSeeder extends Seeder
             $this->call(\Database\Seeders\TimekeepingPermissionsSeeder::class);
         }
 
+        // Seed Badge Management permissions
+        if (class_exists(\Database\Seeders\BadgeManagementPermissionsSeeder::class)) {
+            $this->call(\Database\Seeders\BadgeManagementPermissionsSeeder::class);
+        }
+
         // Seed Workforce Management permissions
         if (class_exists(\Database\Seeders\WorkforceManagementPermissionsSeeder::class)) {
             $this->call(\Database\Seeders\WorkforceManagementPermissionsSeeder::class);
